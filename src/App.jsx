@@ -100,16 +100,28 @@ function LocateControl({ setUserLocation }) {
   const map = useMapEvents({});
   const handleLocate = async () => {
     try {
-      let permissions = await Geolocation.checkPermissions();
-      if (permissions.location !== 'granted') {
-        permissions = await Geolocation.requestPermissions();
-        if (permissions.location !== 'granted') return notify("Permiso de ubicación denegado.");
+      if (Capacitor.isNativePlatform()) {
+        let permissions = await Geolocation.checkPermissions();
+        if (permissions.location !== 'granted') {
+          permissions = await Geolocation.requestPermissions();
+          if (permissions.location !== 'granted') return notify("Permiso de ubicación denegado.");
+        }
+        
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true });
+        const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserLocation(latlng);
+        map.flyTo(latlng, 15);
+      } else {
+        if (!navigator.geolocation) return notify("La geolocalización no está soportada en tu navegador.");
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setUserLocation(latlng);
+            map.flyTo(latlng, 15);
+          },
+          (err) => notify("Permiso de ubicación denegado o error de red.")
+        );
       }
-      
-      const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true });
-      const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setUserLocation(latlng);
-      map.flyTo(latlng, 15);
     } catch (e) {
       notify("No se pudo obtener la ubicación o permiso denegado.");
     }

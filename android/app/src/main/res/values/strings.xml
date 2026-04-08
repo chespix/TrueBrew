@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TrueBrew</string>
+    <string name="title_activity_main">TrueBrew</string>
+    <string name="package_name">app.truebrew.caba</string>
+    <string name="custom_url_scheme">app.truebrew.caba</string>
+</resources>

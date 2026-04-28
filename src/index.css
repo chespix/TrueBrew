@@ -308,3 +308,53 @@ body {
   border: 3px solid white !important;
   box-shadow: 0 0 12px rgba(59, 130, 246, 0.8), 0 0 0 4px rgba(59, 130, 246, 0.2) !important;
 }
+
+/* Overture Suggestions Dropdown */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.overture-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background-color: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  overflow: hidden;
+  animation: slideDown 0.18s ease;
+  z-index: 2000;
+}
+
+.overture-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  border-top: 1px solid var(--border-color);
+}
+
+.overture-item:hover {
+  background-color: rgba(16, 185, 129, 0.08);
+}
+
+.overture-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background-color: rgba(16, 185, 129, 0.2);
+  color: var(--accent-specialty);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 20px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, ZoomControl, useMapEvents } from 'react-leaflet';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, ZoomControl, useMapEvents, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
@@ -160,6 +160,11 @@ function App() {
   const [editForm, setEditForm] = useState({ name: '', address: '', details: '' });
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [overtureResults, setOvertureResults] = useState([]);
+  const [overtureLoading, setOvertureLoading] = useState(false);
+  const [showOvertureDrop, setShowOvertureDrop] = useState(false);
+  const overtureDebounce = useRef(null);
+  const mapRef = useRef(null);
 
   const defaultCenter = [-34.588, -58.430];
 
@@ -182,6 +187,38 @@ function App() {
   useEffect(() => {
     fetchShops();
   }, [fetchShops]);
+
+  // ── Overture Maps Debounced Search ──
+  useEffect(() => {
+    if (!user || searchQuery.length < 3) {
+      setOvertureResults([]);
+      setShowOvertureDrop(false);
+      return;
+    }
+    clearTimeout(overtureDebounce.current);
+    overtureDebounce.current = setTimeout(async () => {
+      setOvertureLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/search/overture?q=${encodeURIComponent(searchQuery)}`, {
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        // Deduplicate: exclude places already on the map (within ~100m)
+        const R = 0.001; // ~100m in degrees
+        const deduped = data.filter(ot =>
+          !shops.some(s => Math.abs(s.lat - ot.lat) < R && Math.abs(s.lng - ot.lng) < R)
+        );
+        setOvertureResults(deduped);
+        setShowOvertureDrop(deduped.length > 0);
+      } catch (e) {
+        setOvertureResults([]);
+        setShowOvertureDrop(false);
+      } finally {
+        setOvertureLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(overtureDebounce.current);
+  }, [searchQuery, user, shops, authHeaders]);
 
   // ── Capacitor UX Polishes ──
   useEffect(() => {
@@ -316,6 +353,15 @@ function App() {
   };
 
   const handleMapClick = (latlng) => setNewLocationDraft({ lat: latlng.lat, lng: latlng.lng });
+
+  const handleOvertureSelect = (place) => {
+    setShowOvertureDrop(false);
+    setSearchQuery('');
+    setIsAddMode(true);
+    setNewLocationDraft({ lat: place.lat, lng: place.lng });
+    setNewFormDetails({ name: place.name, address: place.address, details: '' });
+    if (mapRef.current) mapRef.current.flyTo([place.lat, place.lng], 17);
+  };
 
   const cancelAddLocation = () => {
     setIsAddMode(false);
@@ -488,13 +534,35 @@ function App() {
         {/* Floating Search Bar and Refresh (hidden in Add Mode) */}
         {!isAddMode && (
           <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 20px) + 80px)', left: '10px', right: '54px', zIndex: 1000, display: 'flex', gap: '8px' }}>
-            <div style={{ flex: 1, backgroundColor: 'var(--panel-bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', padding: '0 10px', border: '1px solid var(--border-color)', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-              <Search size={16} color="var(--text-secondary)" />
-              <input type="text" placeholder="Buscar cafetería..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ width: '100%', background: 'transparent', border: 'none', color: 'white', padding: '10px', outline: 'none' }} />
-              {searchQuery && <X size={16} color="var(--text-secondary)" style={{cursor:'pointer'}} onClick={() => setSearchQuery('')} />}
+            <div style={{ flex: 1, position: 'relative' }}>
+              <div style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', padding: '0 10px', border: '1px solid var(--border-color)', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                <Search size={16} color="var(--text-secondary)" />
+                <input id="search-bar" type="text" placeholder="Buscar cafetería..." value={searchQuery}
+                  onChange={e => { setSearchQuery(e.target.value); }}
+                  onBlur={() => setTimeout(() => setShowOvertureDrop(false), 200)}
+                  onFocus={() => overtureResults.length > 0 && setShowOvertureDrop(true)}
+                  style={{ width: '100%', background: 'transparent', border: 'none', color: 'white', padding: '10px', outline: 'none' }} />
+                {overtureLoading && <div style={{ width: 14, height: 14, border: '2px solid var(--accent-specialty)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />}
+                {searchQuery && !overtureLoading && <X size={16} color="var(--text-secondary)" style={{cursor:'pointer', flexShrink: 0}} onClick={() => { setSearchQuery(''); setShowOvertureDrop(false); }} />}
+              </div>
+              {/* Overture Suggestions Dropdown */}
+              {showOvertureDrop && overtureResults.length > 0 && (
+                <div className="overture-dropdown">
+                  <div style={{ padding: '6px 12px 4px', fontSize: '0.65rem', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Cafés en Overture Maps</div>
+                  {overtureResults.map(place => (
+                    <div key={place.overtureId} className="overture-item" onMouseDown={() => handleOvertureSelect(place)}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: '600', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.name}</div>
+                        {place.address && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.address}</div>}
+                      </div>
+                      <span className="overture-badge">+ Agregar</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <button onClick={() => { fetchShops(); if(user?.role === 'admin') fetchPendingShops(); notify("Actualizado"); }} 
-              style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', color: 'white', width: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+            <button onClick={() => { fetchShops(); if(user?.role === 'admin') fetchPendingShops(); notify("Actualizado"); }}
+              style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', color: 'white', width: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', flexShrink: 0 }}>
               <RefreshCw size={18} />
             </button>
           </div>
@@ -509,7 +577,7 @@ function App() {
 
         {/* Map */}
         <main className="map-container" style={{ cursor: isAddMode ? 'crosshair' : 'grab' }}>
-          <MapContainer center={defaultCenter} zoom={13} style={{ height: "100%", width: "100%", zIndex: 1 }} zoomControl={false}>
+          <MapContainer ref={mapRef} center={defaultCenter} zoom={13} style={{ height: "100%", width: "100%", zIndex: 1 }} zoomControl={false}>
             <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
             <ZoomControl position="topright" />
             <LocateControl setUserLocation={setUserLocation} />

@@ -179,6 +179,67 @@ app.post('/api/reset', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// ── Overture Maps Search Proxy ──
+const OVERTURE_API_KEY = process.env.OVERTURE_API_KEY || 'DEMO-API-KEY';
+// Center of CABA with 15km radius to cover the whole city
+const CABA_LAT = -34.6037;
+const CABA_LON = -58.3816;
+const CABA_RADIUS = 15000;
+
+app.get('/api/search/overture', authenticateToken, async (req, res) => {
+  const q = (req.query.q || '').trim().toLowerCase();
+  if (q.length < 3) return res.json([]);
+
+  try {
+    const url = new URL('https://api.overturemapsapi.com/places');
+    url.searchParams.set('lat', CABA_LAT);
+    url.searchParams.set('lon', CABA_LON);
+    url.searchParams.set('radius', CABA_RADIUS);
+    url.searchParams.set('category', 'coffee_shop');
+    url.searchParams.set('country', 'AR');
+    url.searchParams.set('limit', '50');
+
+    const response = await fetch(url.toString(), {
+      headers: { 'x-api-key': OVERTURE_API_KEY }
+    });
+
+    if (!response.ok) {
+      console.error('Overture API error:', response.status, await response.text());
+      return res.json([]);
+    }
+
+    const data = await response.json();
+    const places = Array.isArray(data) ? data : (data.places || data.features || []);
+
+    // Filter by name match and normalize response shape
+    const results = places
+      .filter(p => {
+        const name = p?.properties?.names?.primary || p?.properties?.name || '';
+        return name.toLowerCase().includes(q);
+      })
+      .slice(0, 10)
+      .map(p => {
+        const coords = p?.geometry?.coordinates || [];
+        const props = p?.properties || {};
+        const name = props?.names?.primary || props?.name || 'Sin nombre';
+        const address = props?.addresses?.[0]?.freeform || props?.address || '';
+        return {
+          overtureId: p.id,
+          name,
+          address,
+          lat: coords[1] ?? null,
+          lng: coords[0] ?? null,
+        };
+      })
+      .filter(p => p.lat !== null && p.lng !== null);
+
+    res.json(results);
+  } catch (e) {
+    console.error('Overture search error:', e);
+    res.json([]); // Fail gracefully — never crash the app
+  }
+});
+
 // ── Production: Serve static frontend ──
 if (process.env.NODE_ENV === 'production') {
   import('path').then(pathModule => {

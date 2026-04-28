@@ -186,18 +186,19 @@ const CABA_LAT = -34.6037;
 const CABA_LON = -58.3816;
 const CABA_RADIUS = 15000;
 
-app.get('/api/search/overture', authenticateToken, async (req, res) => {
+app.get('/api/search/overture', optionalAuth, async (req, res) => {
   const q = (req.query.q || '').trim().toLowerCase();
   if (q.length < 3) return res.json([]);
 
   try {
     const url = new URL('https://api.overturemapsapi.com/places');
     url.searchParams.set('lat', CABA_LAT);
-    url.searchParams.set('lon', CABA_LON);
+    url.searchParams.set('lng', CABA_LON);       // correct param is lng not lon
     url.searchParams.set('radius', CABA_RADIUS);
-    url.searchParams.set('category', 'coffee_shop');
+    url.searchParams.set('categories', 'coffee_shop'); // plural
     url.searchParams.set('country', 'AR');
-    url.searchParams.set('limit', '50');
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('limit', '1500');
 
     const response = await fetch(url.toString(), {
       headers: { 'x-api-key': OVERTURE_API_KEY }
@@ -211,27 +212,26 @@ app.get('/api/search/overture', authenticateToken, async (req, res) => {
     const data = await response.json();
     const places = Array.isArray(data) ? data : (data.places || data.features || []);
 
-    // Filter by name match and normalize response shape
+    // Filter, score and rank by relevance
     const results = places
       .filter(p => {
-        const name = p?.properties?.names?.primary || p?.properties?.name || '';
-        return name.toLowerCase().includes(q);
+        const name = (p?.properties?.names?.primary || p?.properties?.ext_name || p?.properties?.name || '').toLowerCase();
+        return name.includes(q);
       })
-      .slice(0, 10)
       .map(p => {
         const coords = p?.geometry?.coordinates || [];
         const props = p?.properties || {};
-        const name = props?.names?.primary || props?.name || 'Sin nombre';
-        const address = props?.addresses?.[0]?.freeform || props?.address || '';
-        return {
-          overtureId: p.id,
-          name,
-          address,
-          lat: coords[1] ?? null,
-          lng: coords[0] ?? null,
-        };
+        const name = props?.names?.primary || props?.ext_name || props?.name || 'Sin nombre';
+        const lname = name.toLowerCase();
+        const addr = props?.addresses;
+        const address = (Array.isArray(addr) ? addr[0]?.freeform : addr?.freeform) || '';
+        const score = lname.startsWith(q) ? 0 : 1;
+        return { overtureId: p.id, name, address, lat: coords[1] ?? null, lng: coords[0] ?? null, score };
       })
-      .filter(p => p.lat !== null && p.lng !== null);
+      .filter(p => p.lat !== null && p.lng !== null)
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 10)
+      .map(({ score, ...rest }) => rest);
 
     res.json(results);
   } catch (e) {

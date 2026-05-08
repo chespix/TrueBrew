@@ -1,3 +1,6 @@
+
+# 100% vibecoded project experiment.
+
 # ☕ TrueBrew
 
 **TrueBrew** es un mapa colaborativo de cafés de especialidad diseñado para Buenos Aires (CABA) y pensado principalmente para uso móvil. Permite a los amantes del café verificar si las cafeterías locales realmente sirven "Café de Especialidad" o no, confiando enteramente en un modelo de consenso impulsado por la comunidad mediante votos a favor y en contra.

@@ -142,7 +142,7 @@ function App() {
   const [userLocation, setUserLocation] = useState(null);
 
   // Light/Dark mode — persisted
-  const [lightMode, setLightMode] = useState(() => localStorage.getItem('tb_theme') === 'light');
+  const [lightMode, setLightMode] = useState(() => localStorage.getItem('tb_theme') !== 'dark');
 
   useEffect(() => {
     const root = document.documentElement;

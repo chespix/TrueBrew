@@ -237,11 +237,21 @@ function App() {
   // ── Capacitor UX Polishes ──
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
-      StatusBar.setBackgroundColor({ color: '#0f1115' }).catch(() => {});
       SplashScreen.hide().catch(() => {});
     }
   }, []);
+
+  // Update native status bar to match light/dark theme
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    if (lightMode) {
+      StatusBar.setStyle({ style: Style.Light }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: '#f0ece4' }).catch(() => {});
+    } else {
+      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: '#0f1115' }).catch(() => {});
+    }
+  }, [lightMode]);
 
   useEffect(() => {
     const attachListener = async () => {

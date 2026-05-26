@@ -4,7 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#0f1115" />
+    <meta name="theme-color" content="#f0ece4" />
+    <!-- Instant theme init: runs before React to prevent dark flash -->
+    <script>
+      (function () {
+        var t = localStorage.getItem('tb_theme');
+        // Default is light; only go dark if explicitly saved as 'dark'
+        if (t !== 'dark') {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
     <meta name="description" content="TrueBrew: Mapa colaborativo de cafés de especialidad en Buenos Aires. Votá y descubrí los mejores cafés de CABA." />
     <meta name="google-signin-client_id" content="646062898063-it6q6muu8aaju4m6rluktnvhvfsmbjvt.apps.googleusercontent.com" />
     <title>TrueBrew — Café de Especialidad CABA</title>

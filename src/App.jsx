@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, ZoomControl, useMapEvents, useMap } fr
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
-import { Coffee, AlertTriangle, ChevronDown, Check, X, Plus, MapPin, ThumbsUp, ThumbsDown, Trash2, LocateFixed, LogOut, Edit3, ShieldAlert, Download, Search, RefreshCw, Sun, Moon } from 'lucide-react';
+import { Coffee, AlertTriangle, ChevronDown, Check, X, Plus, MapPin, ThumbsUp, ThumbsDown, Trash2, LocateFixed, LogOut, Edit3, ShieldAlert, Download, Search, RefreshCw, Sun, Moon, User } from 'lucide-react';
 import { API_BASE } from './config';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
@@ -484,18 +484,31 @@ function App() {
                 {user.role === 'admin' && pendingShops.length > 0 && (
                   <button onClick={() => { setShowModerationModal(true); fetchPendingShops(); }}
                     style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid var(--accent-fake)', color: 'white', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                    <ShieldAlert size={14} /> Pendientes <span style={{ background: 'var(--accent-fake)', padding: '2px 6px', borderRadius: '12px', fontSize: '0.7rem' }}>{pendingShops.length}</span>
+                    <ShieldAlert size={14} /> <span className="btn-text-responsive">Pendientes</span> <span style={{ background: 'var(--accent-fake)', padding: '2px 6px', borderRadius: '12px', fontSize: '0.7rem' }}>{pendingShops.length}</span>
                   </button>
                 )}
                 <button onClick={() => { setIsAddMode(!isAddMode); if (isPanelOpen) closePanel(); }}
                   style={{ background: isAddMode ? 'white' : 'var(--accent-specialty)', border: 'none', color: isAddMode ? 'black' : 'white', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                  {isAddMode ? <X size={14} /> : <Plus size={14} />} {isAddMode ? 'Cancelar' : 'Agregar'}
+                  {isAddMode ? <X size={14} /> : <Plus size={14} />} <span className="btn-text-responsive">{isAddMode ? 'Cancelar' : 'Agregar'}</span>
                 </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: '16px', fontSize: '0.75rem', color: 'var(--accent-brand)' }}>
-                  {user.picture && <img src={user.picture} alt="" style={{ width: 20, height: 20, borderRadius: '50%' }} />}
-                  {user.name?.split(' ')[0]}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  width: '32px', 
+                  height: '32px', 
+                  borderRadius: '50%', 
+                  backgroundColor: 'var(--border-color)', 
+                  border: '1px solid var(--border-color)',
+                  overflow: 'hidden' 
+                }}>
+                  {user.picture ? (
+                    <img src={user.picture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <User size={16} color="var(--accent-brand)" />
+                  )}
                 </div>
-                <button onClick={handleLogout} title="Cerrar Sesión" style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                <button onClick={handleLogout} title="Cerrar Sesión" style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <LogOut size={16} />
                 </button>
               </>

@@ -22,6 +22,21 @@
   --radius-sm: 8px;
 }
 
+/* ── Light Theme ── */
+[data-theme="light"] {
+  --bg-color: #f0ece4;          /* warm parchment — easy on eyes in sunlight */
+  --panel-bg: #fffdf9;          /* near-white cream */
+  --text-primary: #1a1208;      /* very dark espresso */
+  --text-secondary: #6b5c44;    /* warm mid-brown */
+  --border-color: #d6cfc4;      /* soft warm grey */
+  --accent-specialty: #059669;  /* deeper emerald for contrast on white */
+  --accent-fake: #dc2626;       /* slightly darker red */
+  --accent-unverified: #d97706; /* slightly deeper amber */
+  --accent-brand: #92642a;      /* richer coffee brown */
+  --shadow-subtle: 0 4px 6px -1px rgba(0,0,0,0.12), 0 2px 4px -1px rgba(0,0,0,0.07);
+  --shadow-glow: 0 0 15px rgba(5,150,105,0.2);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -34,6 +49,8 @@ body {
   color: var(--text-primary);
   overflow: hidden; /* Avoid scrolling on the main page to act like an app */
   -webkit-font-smoothing: antialiased;
+  /* Smooth theme transitions */
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* App Layout */
@@ -56,6 +73,11 @@ body {
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-color);
   z-index: 1000; /* Above map */
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="light"] .top-nav {
+  background-color: rgba(255, 253, 249, 0.9);
 }
 
 .brand-title {
@@ -141,6 +163,11 @@ body {
   font-weight: bold;
   border-radius: 50% !important;
   box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+[data-theme="light"] .marker-cluster {
+  border: 2px solid rgba(0,0,0,0.15) !important;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  color: #fff !important;
 }
 .marker-cluster-specialty {
   background-color: rgba(16, 185, 129, 0.8) !important;
@@ -298,6 +325,8 @@ body {
 }
 
 .btn-icon:hover { background-color: rgba(255, 255, 255, 0.1); }
+[data-theme="light"] .btn-icon:hover { background-color: rgba(0, 0, 0, 0.06); }
+[data-theme="light"] .btn-icon { color: var(--text-secondary); }
 
 /* User Location Marker */
 .user-location-marker {

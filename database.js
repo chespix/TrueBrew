@@ -171,3 +171,13 @@ export async function seedFromMockShops(mockShops) {
   }
   console.log(`✅ Seed completo: ${mockShops.length} cafés importados en PostgreSQL.`);
 }
+
+// ── Keepalive ──
+
+// Runs a trivial SELECT 1 to keep the PostgreSQL connection alive.
+// Returns the round-trip time in milliseconds.
+export async function pingDb() {
+  const t0 = Date.now();
+  await pool.query('SELECT 1');
+  return Date.now() - t0;
+}

@@ -7,7 +7,7 @@ import rateLimit from 'express-rate-limit';
 import {
   initDatabase, getAllShops, getPendingShops, createShop,
   updateShop, approveShop, deleteShop, upsertVote,
-  findOrCreateUser, seedFromMockShops
+  findOrCreateUser, seedFromMockShops, pingDb
 } from './database.js';
 
 const app = express();
@@ -62,6 +62,22 @@ function requireAdmin(req, res, next) {
 }
 
 // ── Routes ──
+
+// ── Keepalive / Health check (no auth required) ──
+// Use this to keep the Render PostgreSQL DB from sleeping:
+//   curl https://your-app.onrender.com/api/ping
+app.get('/api/ping', async (req, res) => {
+  try {
+    const dbMs = await pingDb();
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      db_response_ms: dbMs
+    });
+  } catch (e) {
+    res.status(500).json({ status: 'error', message: e.message });
+  }
+});
 
 app.post('/api/auth/google', async (req, res) => {
   try {

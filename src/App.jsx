@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, ZoomControl, useMapEvents, useMap } fr
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
-import { Coffee, AlertTriangle, ChevronDown, Check, X, Plus, MapPin, ThumbsUp, ThumbsDown, Trash2, LocateFixed, LogOut, Edit3, ShieldAlert, Download, Search, RefreshCw } from 'lucide-react';
+import { Coffee, AlertTriangle, ChevronDown, Check, X, Plus, MapPin, ThumbsUp, ThumbsDown, Trash2, LocateFixed, LogOut, Edit3, ShieldAlert, Download, Search, RefreshCw, Sun, Moon } from 'lucide-react';
 import { API_BASE } from './config';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
@@ -127,7 +127,7 @@ function LocateControl({ setUserLocation }) {
     }
   };
   return (
-    <button onClick={handleLocate} title="Mi Ubicación" style={{ position: 'absolute', top: '80px', right: '10px', zIndex: 1000, backgroundColor: 'var(--panel-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', color: 'white' }}>
+    <button onClick={handleLocate} title="Mi Ubicación" style={{ position: 'absolute', top: '80px', right: '10px', zIndex: 1000, backgroundColor: 'var(--panel-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', color: 'var(--text-primary)' }}>
       <LocateFixed size={18} />
     </button>
   );
@@ -140,6 +140,20 @@ function App() {
   const [selectedShop, setSelectedShop] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
+
+  // Light/Dark mode — persisted
+  const [lightMode, setLightMode] = useState(() => localStorage.getItem('tb_theme') === 'light');
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (lightMode) {
+      root.setAttribute('data-theme', 'light');
+      localStorage.setItem('tb_theme', 'light');
+    } else {
+      root.removeAttribute('data-theme');
+      localStorage.setItem('tb_theme', 'dark');
+    }
+  }, [lightMode]);
 
   // Auth
   const [token, setToken] = useState(localStorage.getItem('tb_token') || null);
@@ -446,6 +460,15 @@ function App() {
             <div className="brand-dot live-pulse"></div> TrueBrew
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', zIndex: 1000 }}>
+            {/* Light/Dark toggle */}
+            <button
+              id="theme-toggle"
+              onClick={() => setLightMode(m => !m)}
+              title={lightMode ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}
+              style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '8px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' }}
+            >
+              {lightMode ? <Moon size={16} /> : <Sun size={16} />}
+            </button>
             {user ? (
               <>
                 {user.role === 'admin' && pendingShops.length > 0 && (
@@ -535,13 +558,13 @@ function App() {
         {!isAddMode && (
           <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 20px) + 80px)', left: '10px', right: '54px', zIndex: 1000, display: 'flex', gap: '8px' }}>
             <div style={{ flex: 1, position: 'relative' }}>
-              <div style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', padding: '0 10px', border: '1px solid var(--border-color)', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+              <div style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', padding: '0 10px', border: '1px solid var(--border-color)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
                 <Search size={16} color="var(--text-secondary)" />
                 <input id="search-bar" type="text" placeholder="Buscar cafetería..." value={searchQuery}
                   onChange={e => { setSearchQuery(e.target.value); }}
                   onBlur={() => setTimeout(() => setShowOvertureDrop(false), 200)}
                   onFocus={() => overtureResults.length > 0 && setShowOvertureDrop(true)}
-                  style={{ width: '100%', background: 'transparent', border: 'none', color: 'white', padding: '10px', outline: 'none' }} />
+                  style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-primary)', padding: '10px', outline: 'none' }} />
                 {overtureLoading && <div style={{ width: 14, height: 14, border: '2px solid var(--accent-specialty)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />}
                 {searchQuery && !overtureLoading && <X size={16} color="var(--text-secondary)" style={{cursor:'pointer', flexShrink: 0}} onClick={() => { setSearchQuery(''); setShowOvertureDrop(false); }} />}
               </div>
@@ -562,7 +585,7 @@ function App() {
               )}
             </div>
             <button onClick={() => { fetchShops(); if(user?.role === 'admin') fetchPendingShops(); notify("Actualizado"); }}
-              style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', color: 'white', width: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', flexShrink: 0 }}>
+              style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', color: 'var(--text-primary)', width: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', flexShrink: 0 }}>
               <RefreshCw size={18} />
             </button>
           </div>
@@ -578,7 +601,15 @@ function App() {
         {/* Map */}
         <main className="map-container" style={{ cursor: isAddMode ? 'crosshair' : 'grab' }}>
           <MapContainer ref={mapRef} center={defaultCenter} zoom={13} style={{ height: "100%", width: "100%", zIndex: 1 }} zoomControl={false}>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+            <TileLayer
+              key={lightMode ? 'light' : 'dark'}
+              url={
+                lightMode
+                  ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+                  : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+              }
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+            />
             <ZoomControl position="topright" />
             <LocateControl setUserLocation={setUserLocation} />
             <MapEventsHandler isAddMode={isAddMode} onMapClick={handleMapClick} />

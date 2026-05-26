@@ -485,7 +485,7 @@ function App() {
                   {user.picture && <img src={user.picture} alt="" style={{ width: 20, height: 20, borderRadius: '50%' }} />}
                   {user.name?.split(' ')[0]}
                 </div>
-                <button onClick={handleLogout} title="Cerrar Sesión" style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <button onClick={handleLogout} title="Cerrar Sesión" style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}>
                   <LogOut size={16} />
                 </button>
               </>

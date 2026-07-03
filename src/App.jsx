@@ -176,6 +176,8 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [overtureResults, setOvertureResults] = useState([]);
   const [overtureLoading, setOvertureLoading] = useState(false);
+  const [geocodeResults, setGeocodeResults] = useState([]);
+  const [geocodeLoading, setGeocodeLoading] = useState(false);
   const [showOvertureDrop, setShowOvertureDrop] = useState(false);
   const overtureDebounce = useRef(null);
   const mapRef = useRef(null);
@@ -202,33 +204,61 @@ function App() {
     fetchShops();
   }, [fetchShops]);
 
-  // ── Overture Maps Debounced Search ──
+  // ── Debounced Search for Cafes & Addresses ──
   useEffect(() => {
     if (!user || searchQuery.length < 3) {
       setOvertureResults([]);
+      setGeocodeResults([]);
       setShowOvertureDrop(false);
       return;
     }
     clearTimeout(overtureDebounce.current);
     overtureDebounce.current = setTimeout(async () => {
       setOvertureLoading(true);
+      setGeocodeLoading(true);
+
+      const fetchOverture = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/search/overture?q=${encodeURIComponent(searchQuery)}`, {
+            headers: authHeaders()
+          });
+          if (!res.ok) return [];
+          const data = await res.json();
+          const R = 0.001; // ~100m in degrees
+          return data.filter(ot =>
+            !shops.some(s => Math.abs(s.lat - ot.lat) < R && Math.abs(s.lng - ot.lng) < R)
+          );
+        } catch (e) {
+          console.error('Overture fetch error:', e);
+          return [];
+        }
+      };
+
+      const fetchGeocode = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/search/geocode?q=${encodeURIComponent(searchQuery)}`, {
+            headers: authHeaders()
+          });
+          if (!res.ok) return [];
+          return await res.json();
+        } catch (e) {
+          console.error('Geocode fetch error:', e);
+          return [];
+        }
+      };
+
       try {
-        const res = await fetch(`${API_BASE}/api/search/overture?q=${encodeURIComponent(searchQuery)}`, {
-          headers: authHeaders()
-        });
-        const data = await res.json();
-        // Deduplicate: exclude places already on the map (within ~100m)
-        const R = 0.001; // ~100m in degrees
-        const deduped = data.filter(ot =>
-          !shops.some(s => Math.abs(s.lat - ot.lat) < R && Math.abs(s.lng - ot.lng) < R)
-        );
-        setOvertureResults(deduped);
-        setShowOvertureDrop(deduped.length > 0);
+        const [otData, geoData] = await Promise.all([fetchOverture(), fetchGeocode()]);
+        setOvertureResults(otData);
+        setGeocodeResults(geoData);
+        setShowOvertureDrop(otData.length > 0 || geoData.length > 0);
       } catch (e) {
         setOvertureResults([]);
+        setGeocodeResults([]);
         setShowOvertureDrop(false);
       } finally {
         setOvertureLoading(false);
+        setGeocodeLoading(false);
       }
     }, 500);
     return () => clearTimeout(overtureDebounce.current);
@@ -384,6 +414,15 @@ function App() {
     setIsAddMode(true);
     setNewLocationDraft({ lat: place.lat, lng: place.lng });
     setNewFormDetails({ name: place.name, address: place.address, details: '' });
+    if (mapRef.current) mapRef.current.flyTo([place.lat, place.lng], 17);
+  };
+
+  const handleGeocodeSelect = (place) => {
+    setShowOvertureDrop(false);
+    setSearchQuery('');
+    setIsAddMode(true);
+    setNewLocationDraft({ lat: place.lat, lng: place.lng });
+    setNewFormDetails({ name: '', address: place.name, details: '' });
     if (mapRef.current) mapRef.current.flyTo([place.lat, place.lng], 17);
   };
 
@@ -583,27 +622,49 @@ function App() {
             <div style={{ flex: 1, position: 'relative' }}>
               <div style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', padding: '0 10px', border: '1px solid var(--border-color)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
                 <Search size={16} color="var(--text-secondary)" />
-                <input id="search-bar" type="text" placeholder="Buscar cafetería..." value={searchQuery}
+                <input id="search-bar" type="text" placeholder="Buscar cafetería o dirección..." value={searchQuery}
                   onChange={e => { setSearchQuery(e.target.value); }}
                   onBlur={() => setTimeout(() => setShowOvertureDrop(false), 200)}
-                  onFocus={() => overtureResults.length > 0 && setShowOvertureDrop(true)}
+                  onFocus={() => (overtureResults.length > 0 || geocodeResults.length > 0) && setShowOvertureDrop(true)}
                   style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-primary)', padding: '10px', outline: 'none' }} />
-                {overtureLoading && <div style={{ width: 14, height: 14, border: '2px solid var(--accent-specialty)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />}
-                {searchQuery && !overtureLoading && <X size={16} color="var(--text-secondary)" style={{cursor:'pointer', flexShrink: 0}} onClick={() => { setSearchQuery(''); setShowOvertureDrop(false); }} />}
+                {(overtureLoading || geocodeLoading) && <div style={{ width: 14, height: 14, border: '2px solid var(--accent-specialty)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />}
+                {searchQuery && !(overtureLoading || geocodeLoading) && <X size={16} color="var(--text-secondary)" style={{cursor:'pointer', flexShrink: 0}} onClick={() => { setSearchQuery(''); setShowOvertureDrop(false); }} />}
               </div>
-              {/* Overture Suggestions Dropdown */}
-              {showOvertureDrop && overtureResults.length > 0 && (
-                <div className="overture-dropdown">
-                  <div style={{ padding: '6px 12px 4px', fontSize: '0.65rem', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Cafés en Overture Maps</div>
-                  {overtureResults.map(place => (
-                    <div key={place.overtureId} className="overture-item" onMouseDown={() => handleOvertureSelect(place)}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: '600', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.name}</div>
-                        {place.address && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.address}</div>}
-                      </div>
-                      <span className="overture-badge">+ Agregar</span>
-                    </div>
-                  ))}
+              
+              {/* Suggestions Dropdown */}
+              {showOvertureDrop && (overtureResults.length > 0 || geocodeResults.length > 0) && (
+                <div className="overture-dropdown" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                  {/* Overture Cafes */}
+                  {overtureResults.length > 0 && (
+                    <>
+                      <div style={{ padding: '8px 12px 4px', fontSize: '0.65rem', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Cafés en Overture Maps</div>
+                      {overtureResults.map(place => (
+                        <div key={place.overtureId} className="overture-item" onMouseDown={() => handleOvertureSelect(place)}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: '600', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.name}</div>
+                            {place.address && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.address}</div>}
+                          </div>
+                          <span className="overture-badge">+ Agregar</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Address Geocoding */}
+                  {geocodeResults.length > 0 && (
+                    <>
+                      <div style={{ padding: '8px 12px 4px', fontSize: '0.65rem', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: overtureResults.length > 0 ? '1px solid var(--border-color)' : 'none', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>📍 Agregar en dirección</div>
+                      {geocodeResults.map((place, idx) => (
+                        <div key={`geo-${idx}`} className="overture-item" onMouseDown={() => handleGeocodeSelect(place)}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: '600', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.name}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Buenos Aires, CABA</div>
+                          </div>
+                          <span className="overture-badge" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.4)' }}>+ Ubicar</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>

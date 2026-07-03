@@ -256,6 +256,72 @@ app.get('/api/search/overture', optionalAuth, async (req, res) => {
   }
 });
 
+// ── Geocoding Search Proxy ──
+app.get('/api/search/geocode', optionalAuth, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 3) return res.json([]);
+
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', q);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('limit', '5');
+    url.searchParams.set('countrycodes', 'ar');
+    // Bound search to CABA (Buenos Aires city)
+    url.searchParams.set('viewbox', '-58.5318,-34.7056,-58.3351,-34.5265');
+    url.searchParams.set('bounded', '1');
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'User-Agent': 'TrueBrewApp/1.0 (contact@truebrew.example.com)'
+      }
+    });
+
+    if (!response.ok) {
+      console.error('Nominatim API error:', response.status, await response.text());
+      return res.json([]);
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) return res.json([]);
+
+    const cleanAddress = (displayName) => {
+      const parts = displayName.split(',').map(p => p.trim());
+      if (parts.length === 0) return displayName;
+      
+      // If first part is numeric (house number) and second part is street name, combine them
+      if (parts.length > 1 && /^\d+$/.test(parts[0])) {
+        parts[1] = `${parts[1]} ${parts[0]}`;
+        parts.shift();
+      }
+      
+      const cleanParts = parts.filter(p => {
+        const lower = p.toLowerCase();
+        if (lower === 'argentina') return false;
+        if (lower.includes('ciudad autónoma de buenos aires')) return false;
+        if (lower === 'buenos aires') return false;
+        if (lower.startsWith('comuna ')) return false;
+        if (/^[a-z]?\d{4}[a-z]{3}$/i.test(p)) return false; // C1425BGV
+        if (/^\d{4}$/.test(p)) return false; // 1425
+        return true;
+      });
+      
+      return cleanParts.slice(0, 2).join(', ');
+    };
+
+    const results = data.map(item => ({
+      name: cleanAddress(item.display_name),
+      lat: parseFloat(item.lat),
+      lng: parseFloat(item.lon)
+    })).filter(item => !isNaN(item.lat) && !isNaN(item.lng));
+
+    res.json(results);
+  } catch (e) {
+    console.error('Geocoding search error:', e);
+    res.json([]); // Fail gracefully
+  }
+});
+
 // ── Production: Serve static frontend ──
 if (process.env.NODE_ENV === 'production') {
   import('path').then(pathModule => {

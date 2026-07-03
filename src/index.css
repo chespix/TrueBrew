@@ -109,6 +109,15 @@ body {
   font-family: 'Inter', sans-serif !important;
 }
 
+/* Improve dark map contrast & legibility */
+.leaflet-tile {
+  filter: brightness(1.35) contrast(1.2) saturate(1.1);
+}
+
+[data-theme="light"] .leaflet-tile {
+  filter: none;
+}
+
 .leaflet-popup-content-wrapper {
   background-color: var(--panel-bg);
   color: var(--text-primary);

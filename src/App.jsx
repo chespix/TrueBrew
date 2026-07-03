@@ -719,14 +719,14 @@ function App() {
           <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '16px', padding: '24px', width: '90%', maxWidth: '400px' }}>
               <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={18} /> Nuevo Local</h3>
-              <input type="text" placeholder="Nombre del Local *" value={newFormDetails.name} onChange={e => setNewFormDetails({ ...newFormDetails, name: e.target.value })} style={{ width: '100%', padding: '10px', marginBottom: '12px', borderRadius: '8px', background: 'var(--bg-color)', color: 'white', border: '1px solid var(--border-color)' }} autoFocus />
-              <input type="text" placeholder="Dirección (opcional)" value={newFormDetails.address} onChange={e => setNewFormDetails({ ...newFormDetails, address: e.target.value })} style={{ width: '100%', padding: '10px', marginBottom: '12px', borderRadius: '8px', background: 'var(--bg-color)', color: 'white', border: '1px solid var(--border-color)' }} />
-              <textarea placeholder="Descripción breve (opcional)" value={newFormDetails.details} onChange={e => setNewFormDetails({ ...newFormDetails, details: e.target.value })} style={{ width: '100%', padding: '10px', marginBottom: '20px', borderRadius: '8px', background: 'var(--bg-color)', color: 'white', border: '1px solid var(--border-color)', resize: 'vertical', minHeight: '80px' }} />
+              <input type="text" placeholder="Nombre del Local *" value={newFormDetails.name} onChange={e => setNewFormDetails({ ...newFormDetails, name: e.target.value })} style={{ width: '100%', padding: '10px', marginBottom: '12px', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }} autoFocus />
+              <input type="text" placeholder="Dirección (opcional)" value={newFormDetails.address} onChange={e => setNewFormDetails({ ...newFormDetails, address: e.target.value })} style={{ width: '100%', padding: '10px', marginBottom: '12px', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }} />
+              <textarea placeholder="Descripción breve (opcional)" value={newFormDetails.details} onChange={e => setNewFormDetails({ ...newFormDetails, details: e.target.value })} style={{ width: '100%', padding: '10px', marginBottom: '20px', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', resize: 'vertical', minHeight: '80px' }} />
               {user?.role !== 'admin' && (
                 <p style={{ fontSize: '0.8rem', color: 'var(--accent-unverified)', marginBottom: '16px' }}>📌 Tu local quedará pendiente de aprobación por un administrador.</p>
               )}
               <div style={{ display: 'flex', gap: '12px' }}>
-                <button onClick={cancelAddLocation} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', color: 'white', cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={cancelAddLocation} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}>Cancelar</button>
                 <button onClick={submitNewLocation} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', background: 'var(--accent-specialty)', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>Guardar</button>
               </div>
             </div>
@@ -745,7 +745,7 @@ function App() {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   {isEditingShop ? (
-                    <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} style={{ width: '80%', padding: '8px', marginBottom: '8px', backgroundColor: 'var(--bg-color)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '1.2rem', fontWeight: 'bold' }} />
+                    <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} style={{ width: '80%', padding: '8px', marginBottom: '8px', backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '1.2rem', fontWeight: 'bold' }} />
                   ) : (
                     <h2 className="shop-title">{selectedShop.name}</h2>
                   )}
@@ -753,7 +753,7 @@ function App() {
                 </div>
 
                 {isEditingShop ? (
-                  <input type="text" value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} style={{ width: '100%', padding: '8px', marginBottom: '16px', backgroundColor: 'var(--bg-color)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
+                  <input type="text" value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} style={{ width: '100%', padding: '8px', marginBottom: '16px', backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
                 ) : (
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>{selectedShop.address}</p>
                 )}
@@ -771,7 +771,7 @@ function App() {
                 </div>
 
                 {isEditingShop ? (
-                  <textarea value={editForm.details} onChange={e => setEditForm({ ...editForm, details: e.target.value })} style={{ width: '100%', padding: '8px', marginBottom: '16px', backgroundColor: 'var(--bg-color)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', minHeight: '80px', resize: 'vertical' }} />
+                  <textarea value={editForm.details} onChange={e => setEditForm({ ...editForm, details: e.target.value })} style={{ width: '100%', padding: '8px', marginBottom: '16px', backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', minHeight: '80px', resize: 'vertical' }} />
                 ) : (
                   <p style={{ lineHeight: '1.6', marginBottom: '16px' }}>{selectedShop.details}</p>
                 )}
@@ -804,7 +804,7 @@ function App() {
                   </div>
                 ) : (
                   <div style={{ marginTop: '24px', textAlign: 'center' }}>
-                    <button onClick={() => setShowLoginModal(true)} style={{ background: 'var(--border-color)', border: 'none', color: 'white', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', width: '100%' }}>
+                    <button onClick={() => setShowLoginModal(true)} style={{ background: 'var(--border-color)', border: 'none', color: 'var(--text-primary)', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', width: '100%' }}>
                       Inicia sesión para votar
                     </button>
                   </div>
@@ -815,15 +815,15 @@ function App() {
                   <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
                     {isEditingShop ? (
                       <>
-                        <button onClick={() => setIsEditingShop(false)} style={{ flex: 1, background: 'transparent', border: '1px solid var(--border-color)', color: 'white', padding: '10px', borderRadius: '8px', cursor: 'pointer' }}>Cancelar</button>
+                        <button onClick={() => setIsEditingShop(false)} style={{ flex: 1, background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '8px', cursor: 'pointer' }}>Cancelar</button>
                         <button onClick={() => saveEdit(selectedShop.id)} style={{ flex: 1, background: 'var(--accent-specialty)', border: 'none', color: 'white', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Guardar</button>
                       </>
                     ) : (
                       <>
-                        <button onClick={startEditing} style={{ flex: 1, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--text-primary)', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                        <button onClick={startEditing} style={{ flex: 1, background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
                           <Edit3 size={16} /> Editar
                         </button>
-                        <button onClick={() => handleDeleteShop(selectedShop.id)} style={{ flex: 1, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--accent-fake)', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                        <button onClick={() => handleDeleteShop(selectedShop.id)} style={{ flex: 1, background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--accent-fake)', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
                           <Trash2 size={16} /> Eliminar
                         </button>
                       </>

@@ -1,137 +1,28 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, ZoomControl, useMapEvents } from 'react-leaflet';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, ZoomControl } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
 import { SocialLogin } from '@capgo/capacitor-social-login';
-import { Coffee, AlertTriangle, ChevronDown, Check, X, Plus, MapPin, ThumbsUp, ThumbsDown, Trash2, LocateFixed, LogOut, Edit3, ShieldAlert, Download, Search, RefreshCw, Sun, Moon, User } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { API_BASE } from './config';
-import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
-import { Toast } from '@capacitor/toast';
 import { App as CapacitorApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Dialog } from '@capacitor/dialog';
-import { GoogleLogin } from '@react-oauth/google';
 import 'leaflet/dist/leaflet.css';
+import { notify } from './lib/notify';
+import { getDerivedStatus } from './lib/shopStatus';
+import { createIcon, createClusterCustomIcon } from './map/icons';
+import { MapEventsHandler, LocateControl } from './map/MapControls';
+import TopNav from './components/TopNav';
+import ModerationModal from './components/ModerationModal';
+import LoginModal from './components/LoginModal';
+import SearchBar from './components/SearchBar';
+import NewLocationForm from './components/NewLocationForm';
+import ShopDetails from './components/ShopDetails';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '646062898063-it6q6muu8aaju4m6rluktnvhvfsmbjvt.apps.googleusercontent.com';
-
-const notify = async (msg) => {
-  if (Capacitor.isNativePlatform()) {
-    await Toast.show({ text: msg });
-  } else {
-    alert(msg);
-  }
-};
-
-// ── Helpers ──
-
-const countVotes = (shop) => ({
-  upvotes: shop?.upvotes || 0,
-  downvotes: shop?.downvotes || 0
-});
-
-const getDerivedStatus = (shop) => {
-  const { upvotes, downvotes } = countVotes(shop);
-  if (upvotes > downvotes) return 'specialty';
-  if (downvotes > upvotes) return 'fake';
-  return 'unverified';
-};
-
-const createIcon = (status) => {
-  let iconClass = 'marker-unverified';
-  let innerHtml = '<div style="color:white; display:flex; align-items:center; justify-content:center; height:100%;">';
-  if (status === 'specialty') {
-    iconClass = 'marker-specialty';
-    innerHtml += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/></svg>';
-  } else if (status === 'fake') {
-    iconClass = 'marker-fake';
-    innerHtml += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-  } else {
-    innerHtml += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
-  }
-  innerHtml += '</div>';
-  return L.divIcon({ className: `custom-marker ${iconClass}`, html: innerHtml, iconSize: [32, 32], iconAnchor: [16, 16] });
-};
-
-const createClusterCustomIcon = (cluster) => {
-  const childCount = cluster.getChildCount();
-  const markers = cluster.getAllChildMarkers();
-  
-  let specialty = 0;
-  let fake = 0;
-  let unverified = 0;
-
-  markers.forEach(m => {
-    const className = m.options.icon?.options?.className || '';
-    if (className.includes('marker-specialty')) specialty++;
-    else if (className.includes('marker-fake')) fake++;
-    else unverified++;
-  });
-
-  // Default color is unverified/yellow
-  let dominantClass = 'marker-cluster-unverified';
-  
-  // If the majority of the nodes inside are specialty
-  if (specialty > fake && specialty >= unverified) {
-    dominantClass = 'marker-cluster-specialty';
-  } 
-  // If the majority are fake
-  else if (fake > specialty && fake > unverified) {
-    dominantClass = 'marker-cluster-fake';
-  }
-
-  return L.divIcon({
-    html: `<div><span>${childCount}</span></div>`,
-    className: `marker-cluster ${dominantClass}`,
-    iconSize: L.point(40, 40)
-  });
-};
-
-// ── Map Sub-Components ──
-
-function MapEventsHandler({ isAddMode, onMapClick }) {
-  useMapEvents({ click(e) { if (isAddMode) onMapClick(e.latlng); } });
-  return null;
-}
-
-function LocateControl({ setUserLocation }) {
-  const map = useMapEvents({});
-  const handleLocate = async () => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        let permissions = await Geolocation.checkPermissions();
-        if (permissions.location !== 'granted') {
-          permissions = await Geolocation.requestPermissions();
-          if (permissions.location !== 'granted') return notify("Permiso de ubicación denegado.");
-        }
-        
-        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true });
-        const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setUserLocation(latlng);
-        map.flyTo(latlng, 15);
-      } else {
-        if (!navigator.geolocation) return notify("La geolocalización no está soportada en tu navegador.");
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            setUserLocation(latlng);
-            map.flyTo(latlng, 15);
-          },
-          () => notify("Permiso de ubicación denegado o error de red.")
-        );
-      }
-    } catch {
-      notify("No se pudo obtener la ubicación o permiso denegado.");
-    }
-  };
-  return (
-    <button onClick={handleLocate} title="Mi Ubicación" style={{ position: 'absolute', top: '80px', right: '10px', zIndex: 1000, backgroundColor: 'var(--panel-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', color: 'var(--text-primary)' }}>
-      <LocateFixed size={18} />
-    </button>
-  );
-}
 
 // ── Main App ──
 
@@ -504,175 +395,40 @@ function App() {
     <>
       <div className="app-container">
         {/* Navbar */}
-        <nav className="top-nav" style={{ gap: '8px' }}>
-          <div className="brand-title">
-            <div className="brand-dot live-pulse"></div> TrueBrew
-          </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', zIndex: 1000 }}>
-            {/* Light/Dark toggle */}
-            <button
-              id="theme-toggle"
-              onClick={() => setLightMode(m => !m)}
-              title={lightMode ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}
-              style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '8px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' }}
-            >
-              {lightMode ? <Moon size={16} /> : <Sun size={16} />}
-            </button>
-            {user ? (
-              <>
-                {user.role === 'admin' && pendingShops.length > 0 && (
-                  <button onClick={() => { setShowModerationModal(true); fetchPendingShops(); }}
-                    style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid var(--accent-fake)', color: 'white', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                    <ShieldAlert size={14} /> <span className="btn-text-responsive">Pendientes</span> <span style={{ background: 'var(--accent-fake)', padding: '2px 6px', borderRadius: '12px', fontSize: '0.7rem' }}>{pendingShops.length}</span>
-                  </button>
-                )}
-                <button onClick={() => { setIsAddMode(!isAddMode); if (isPanelOpen) closePanel(); }}
-                  style={{ background: isAddMode ? 'white' : 'var(--accent-specialty)', border: 'none', color: isAddMode ? 'black' : 'white', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                  {isAddMode ? <X size={14} /> : <Plus size={14} />} <span className="btn-text-responsive">{isAddMode ? 'Cancelar' : 'Agregar'}</span>
-                </button>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  width: '32px', 
-                  height: '32px', 
-                  borderRadius: '50%', 
-                  backgroundColor: 'var(--border-color)', 
-                  border: '1px solid var(--border-color)',
-                  overflow: 'hidden' 
-                }}>
-                  {user.picture ? (
-                    <img src={user.picture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <User size={16} color="var(--accent-brand)" />
-                  )}
-                </div>
-                <button onClick={handleLogout} title="Cerrar Sesión" style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <LogOut size={16} />
-                </button>
-              </>
-            ) : (
-              <button onClick={() => setShowLoginModal(true)} style={{ background: 'var(--accent-specialty)', border: 'none', color: 'white', padding: '6px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                Inicia Sesión
-              </button>
-            )}
-          </div>
-        </nav>
+        <TopNav
+          lightMode={lightMode} setLightMode={setLightMode} user={user}
+          pendingShops={pendingShops} setShowModerationModal={setShowModerationModal} fetchPendingShops={fetchPendingShops}
+          isAddMode={isAddMode} setIsAddMode={setIsAddMode} isPanelOpen={isPanelOpen} closePanel={closePanel}
+          handleLogout={handleLogout} setShowLoginModal={setShowLoginModal}
+        />
 
         {/* Moderation Modal */}
         {showModerationModal && (
-          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '16px', padding: '24px', width: '90%', maxWidth: '500px', maxHeight: '80dvh', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><ShieldAlert size={20} color="var(--accent-fake)" /> Moderación</h2>
-                <button className="btn-icon" onClick={() => setShowModerationModal(false)}><X size={24} /></button>
-              </div>
-              <div style={{ overflowY: 'auto', flex: 1 }}>
-                {pendingShops.length === 0 ? (
-                  <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>No hay solicitudes pendientes.</p>
-                ) : pendingShops.map(shop => (
-                  <div key={shop.id} style={{ backgroundColor: 'var(--bg-color)', padding: '16px', borderRadius: '12px', marginBottom: '12px', border: '1px solid var(--border-color)' }}>
-                    <h3 style={{ marginBottom: '4px' }}>{shop.name}</h3>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>{shop.address}</p>
-                    <p style={{ fontSize: '0.9rem', marginBottom: '16px' }}>{shop.details}</p>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={() => handleRejectShop(shop.id)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--accent-fake)', background: 'transparent', color: 'var(--accent-fake)', cursor: 'pointer' }}>Rechazar</button>
-                      <button onClick={() => handleApproveShop(shop.id)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: 'var(--accent-specialty)', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>Aprobar</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <ModerationModal
+            pendingShops={pendingShops} setShowModerationModal={setShowModerationModal}
+            handleRejectShop={handleRejectShop} handleApproveShop={handleApproveShop}
+          />
         )}
 
         {/* Login Modal */}
         {showLoginModal && (
-          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '16px', padding: '32px', width: '90%', maxWidth: '350px', textAlign: 'center' }}>
-              <h2 style={{ marginBottom: '8px' }}>Bienvenido a TrueBrew</h2>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '24px' }}>
-                Inicia sesión con tu cuenta de Google para votar, agregar locales y más.
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-                {Capacitor.isNativePlatform() ? (
-                  <button onClick={handleNativeGoogleLogin} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'white', color: 'black', padding: '12px 24px', borderRadius: '24px', border: 'none', fontWeight: 'bold', cursor: 'pointer', width: '100%', maxWidth: '240px', fontSize: '0.95rem' }}>
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" style={{ width: 18, height: 18 }} />
-                    Continuar con Google
-                  </button>
-                ) : (
-                  <GoogleLogin
-                    onSuccess={handleWebGoogleLoginSuccess}
-                    onError={() => notify("La conexión con Google falló.")}
-                    useOneTap
-                    shape="pill"
-                  />
-                )}
-              </div>
-              <button onClick={() => setShowLoginModal(false)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                Cerrar
-              </button>
-            </div>
-          </div>
+          <LoginModal
+            handleNativeGoogleLogin={handleNativeGoogleLogin}
+            handleWebGoogleLoginSuccess={handleWebGoogleLoginSuccess}
+            setShowLoginModal={setShowLoginModal}
+          />
         )}
 
         {/* Floating Search Bar and Refresh (hidden in Add Mode) */}
         {!isAddMode && (
-          <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 20px) + 80px)', left: '10px', right: '54px', zIndex: 1000, display: 'flex', gap: '8px' }}>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <div style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', padding: '0 10px', border: '1px solid var(--border-color)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-                <Search size={16} color="var(--text-secondary)" />
-                <input id="search-bar" type="text" placeholder="Buscar cafetería o dirección..." value={searchQuery}
-                  onChange={e => { setSearchQuery(e.target.value); }}
-                  onBlur={() => setTimeout(() => setShowOvertureDrop(false), 200)}
-                  onFocus={() => (overtureResults.length > 0 || geocodeResults.length > 0) && setShowOvertureDrop(true)}
-                  style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-primary)', padding: '10px', outline: 'none' }} />
-                {(overtureLoading || geocodeLoading) && <div style={{ width: 14, height: 14, border: '2px solid var(--accent-specialty)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />}
-                {searchQuery && !(overtureLoading || geocodeLoading) && <X size={16} color="var(--text-secondary)" style={{cursor:'pointer', flexShrink: 0}} onClick={() => { setSearchQuery(''); setShowOvertureDrop(false); }} />}
-              </div>
-              
-              {/* Suggestions Dropdown */}
-              {showOvertureDrop && (overtureResults.length > 0 || geocodeResults.length > 0) && (
-                <div className="overture-dropdown" style={{ maxHeight: '350px', overflowY: 'auto' }}>
-                  {/* Overture Cafes */}
-                  {overtureResults.length > 0 && (
-                    <>
-                      <div style={{ padding: '8px 12px 4px', fontSize: '0.65rem', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Cafés en Overture Maps</div>
-                      {overtureResults.map(place => (
-                        <div key={place.overtureId} className="overture-item" onMouseDown={() => handleOvertureSelect(place)}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: '600', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.name}</div>
-                            {place.address && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.address}</div>}
-                          </div>
-                          <span className="overture-badge">+ Agregar</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  {/* Address Geocoding */}
-                  {geocodeResults.length > 0 && (
-                    <>
-                      <div style={{ padding: '8px 12px 4px', fontSize: '0.65rem', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: overtureResults.length > 0 ? '1px solid var(--border-color)' : 'none', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>📍 Agregar en dirección</div>
-                      {geocodeResults.map((place, idx) => (
-                        <div key={`geo-${idx}`} className="overture-item" onMouseDown={() => handleGeocodeSelect(place)}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: '600', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{place.name}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Buenos Aires, CABA</div>
-                          </div>
-                          <span className="overture-badge" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.4)' }}>+ Ubicar</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-            <button onClick={() => { fetchShops(); if(user?.role === 'admin') fetchPendingShops(); notify("Actualizado"); }}
-              style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', color: 'var(--text-primary)', width: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', flexShrink: 0 }}>
-              <RefreshCw size={18} />
-            </button>
-          </div>
+          <SearchBar
+            searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+            overtureResults={overtureResults} geocodeResults={geocodeResults}
+            overtureLoading={overtureLoading} geocodeLoading={geocodeLoading}
+            showOvertureDrop={showOvertureDrop} setShowOvertureDrop={setShowOvertureDrop}
+            handleOvertureSelect={handleOvertureSelect} handleGeocodeSelect={handleGeocodeSelect}
+            onRefresh={() => { fetchShops(); if (user?.role === 'admin') fetchPendingShops(); notify("Actualizado"); }}
+          />
         )}
 
         {/* Add Mode Banner */}
@@ -713,123 +469,24 @@ function App() {
 
         {/* New Location Form */}
         {newLocationDraft && (
-          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ backgroundColor: 'var(--panel-bg)', borderRadius: '16px', padding: '24px', width: '90%', maxWidth: '400px' }}>
-              <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={18} /> Nuevo Local</h3>
-              <input type="text" placeholder="Nombre del Local *" value={newFormDetails.name} onChange={e => setNewFormDetails({ ...newFormDetails, name: e.target.value })} style={{ width: '100%', padding: '10px', marginBottom: '12px', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }} autoFocus />
-              <input type="text" placeholder="Dirección (opcional)" value={newFormDetails.address} onChange={e => setNewFormDetails({ ...newFormDetails, address: e.target.value })} style={{ width: '100%', padding: '10px', marginBottom: '12px', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }} />
-              <textarea placeholder="Descripción breve (opcional)" value={newFormDetails.details} onChange={e => setNewFormDetails({ ...newFormDetails, details: e.target.value })} style={{ width: '100%', padding: '10px', marginBottom: '20px', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', resize: 'vertical', minHeight: '80px' }} />
-              {user?.role !== 'admin' && (
-                <p style={{ fontSize: '0.8rem', color: 'var(--accent-unverified)', marginBottom: '16px' }}>📌 Tu local quedará pendiente de aprobación por un administrador.</p>
-              )}
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button onClick={cancelAddLocation} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}>Cancelar</button>
-                <button onClick={submitNewLocation} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', background: 'var(--accent-specialty)', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>Guardar</button>
-              </div>
-            </div>
-          </div>
+          <NewLocationForm
+            newFormDetails={newFormDetails} setNewFormDetails={setNewFormDetails} user={user}
+            cancelAddLocation={cancelAddLocation} submitNewLocation={submitNewLocation}
+          />
         )}
 
         {/* Details Panel */}
         <div className={`details-panel ${isPanelOpen && !isAddMode ? 'open' : ''}`}>
           <div className="panel-handle" onClick={closePanel}></div>
-          {selectedShop ? (() => {
-            const { upvotes, downvotes } = countVotes(selectedShop);
-            const status = getDerivedStatus(selectedShop);
-            const myVote = user ? selectedShop.myVote : null;
-
-            return (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  {isEditingShop ? (
-                    <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} style={{ width: '80%', padding: '8px', marginBottom: '8px', backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '1.2rem', fontWeight: 'bold' }} />
-                  ) : (
-                    <h2 className="shop-title">{selectedShop.name}</h2>
-                  )}
-                  <button className="btn-icon" onClick={closePanel}><ChevronDown size={24} /></button>
-                </div>
-
-                {isEditingShop ? (
-                  <input type="text" value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} style={{ width: '100%', padding: '8px', marginBottom: '16px', backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
-                ) : (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>{selectedShop.address}</p>
-                )}
-
-                {selectedShop.approved === false && (
-                  <div style={{ backgroundColor: 'rgba(245,158,11,0.2)', color: 'var(--accent-unverified)', padding: '10px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.85rem', border: '1px dashed var(--accent-unverified)' }}>
-                    <strong>📌 Pendiente de Aprobación.</strong> Sólo tú puedes ver este local hasta que un administrador lo apruebe.
-                  </div>
-                )}
-
-                <div className={`status-badge ${status}`}>
-                  {status === 'specialty' && <><Check size={16} /> Café de Especialidad</>}
-                  {status === 'fake' && <><AlertTriangle size={16} /> Evitar (Falso Especialidad)</>}
-                  {status === 'unverified' && <><Coffee size={16} /> En proceso de votación</>}
-                </div>
-
-                {isEditingShop ? (
-                  <textarea value={editForm.details} onChange={e => setEditForm({ ...editForm, details: e.target.value })} style={{ width: '100%', padding: '8px', marginBottom: '16px', backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', minHeight: '80px', resize: 'vertical' }} />
-                ) : (
-                  <p style={{ lineHeight: '1.6', marginBottom: '16px' }}>{selectedShop.details}</p>
-                )}
-
-                {/* Vote Bar */}
-                <div style={{ width: '100%', height: '6px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden', display: 'flex', marginBottom: '8px' }}>
-                  {(upvotes + downvotes) > 0 ? (
-                    <>
-                      <div style={{ height: '100%', backgroundColor: 'var(--accent-specialty)', width: `${(upvotes / (upvotes + downvotes)) * 100}%` }}></div>
-                      <div style={{ height: '100%', backgroundColor: 'var(--accent-fake)', width: `${(downvotes / (upvotes + downvotes)) * 100}%` }}></div>
-                    </>
-                  ) : <div style={{ height: '100%', backgroundColor: 'var(--accent-unverified)', width: '100%' }}></div>}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  <span style={{ fontWeight: myVote === 'up' ? 'bold' : 'normal', color: myVote === 'up' ? 'var(--accent-specialty)' : '' }}>Verdadero: {upvotes}</span>
-                  <span style={{ fontWeight: myVote === 'down' ? 'bold' : 'normal', color: myVote === 'down' ? 'var(--accent-fake)' : '' }}>Falso: {downvotes}</span>
-                </div>
-
-                {/* Vote Buttons */}
-                {user ? (
-                  <div className="admin-actions">
-                    <button className="btn btn-verify" onClick={() => handleVote(selectedShop.id, 'up')}
-                      style={{ backgroundColor: myVote === 'up' ? '#059669' : 'transparent', color: myVote === 'up' ? 'white' : '#10b981', border: '1px solid #10b981' }}>
-                      <ThumbsUp size={16} fill={myVote === 'up' ? 'white' : 'transparent'} /> Votar a favor
-                    </button>
-                    <button className="btn btn-mark-fake" onClick={() => handleVote(selectedShop.id, 'down')}
-                      style={{ backgroundColor: myVote === 'down' ? 'rgba(239,68,68,0.2)' : 'transparent', color: '#ef4444', border: '1px solid #ef4444' }}>
-                      <ThumbsDown size={16} fill={myVote === 'down' ? '#ef4444' : 'transparent'} /> Votar en contra
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: '24px', textAlign: 'center' }}>
-                    <button onClick={() => setShowLoginModal(true)} style={{ background: 'var(--border-color)', border: 'none', color: 'var(--text-primary)', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', width: '100%' }}>
-                      Inicia sesión para votar
-                    </button>
-                  </div>
-                )}
-
-                {/* Admin Actions */}
-                {user?.role === 'admin' && (
-                  <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                    {isEditingShop ? (
-                      <>
-                        <button onClick={() => setIsEditingShop(false)} style={{ flex: 1, background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '8px', cursor: 'pointer' }}>Cancelar</button>
-                        <button onClick={() => saveEdit(selectedShop.id)} style={{ flex: 1, background: 'var(--accent-specialty)', border: 'none', color: 'white', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Guardar</button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={startEditing} style={{ flex: 1, background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                          <Edit3 size={16} /> Editar
-                        </button>
-                        <button onClick={() => handleDeleteShop(selectedShop.id)} style={{ flex: 1, background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--accent-fake)', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                          <Trash2 size={16} /> Eliminar
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </>
-            );
-          })() : null}
+          {selectedShop && (
+            <ShopDetails
+              selectedShop={selectedShop} user={user}
+              isEditingShop={isEditingShop} setIsEditingShop={setIsEditingShop}
+              editForm={editForm} setEditForm={setEditForm}
+              closePanel={closePanel} handleVote={handleVote} setShowLoginModal={setShowLoginModal}
+              startEditing={startEditing} saveEdit={saveEdit} handleDeleteShop={handleDeleteShop}
+            />
+          )}
         </div>
       </div>
     </>

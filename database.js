@@ -1,13 +1,35 @@
 import pg from 'pg';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const { Pool } = pg;
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
+// ── SSL ──
+// Aiven signs its servers with a per-project CA (ca.pem in the repo root), so
+// for Aiven hosts we verify the server against it instead of trusting any
+// certificate. Other hosts keep the previous behavior (encrypted, unverified).
+// Escape hatches: DB_SSL=false (e.g. a local Postgres without SSL) and
+// DB_SSL_INSECURE=true (skip verification if the CA ever changes).
+function buildPoolConfig(databaseUrl) {
+  if (!databaseUrl) return {};
+  if (process.env.DB_SSL === 'false') return { connectionString: databaseUrl, ssl: false };
+
+  let url;
+  try { url = new URL(databaseUrl); } catch { return { connectionString: databaseUrl, ssl: { rejectUnauthorized: false } }; }
+  // sslmode in the URL would override the ssl option below, so drop it.
+  url.searchParams.delete('sslmode');
+  const connectionString = url.toString();
+
+  const caPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ca.pem');
+  const isAiven = url.hostname.endsWith('.aivencloud.com');
+  if (isAiven && process.env.DB_SSL_INSECURE !== 'true' && fs.existsSync(caPath)) {
+    return { connectionString, ssl: { rejectUnauthorized: true, ca: fs.readFileSync(caPath, 'utf8') } };
   }
-});
+  return { connectionString, ssl: { rejectUnauthorized: false } };
+}
+
+const pool = new Pool(buildPoolConfig(process.env.DATABASE_URL));
 
 export async function initDatabase() {
   await pool.query(`

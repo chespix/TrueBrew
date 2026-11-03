@@ -68,21 +68,36 @@ export async function findOrCreateUser(googleId, email, name, picture, adminEmai
 
 // ── Shop Operations ──
 
-async function attachVotes(shops) {
+// Attaches vote info to each shop without exposing who voted or who created it.
+// - upvotes / downvotes / myVote: used by current clients.
+// - votes: anonymized map kept for older app versions still installed. It has
+//   one entry per vote, keyed by an opaque index, except the requesting user's
+//   own vote, which stays keyed by their id so old clients can still show it.
+async function attachVotes(shops, userId = null) {
   if (shops.length === 0) return shops;
   const shopIds = shops.map(s => s.id);
   const { rows } = await pool.query(`SELECT shop_id, user_id, type FROM votes WHERE shop_id = ANY($1)`, [shopIds]);
-  
-  const voteMap = {};
+
+  const info = {};
   rows.forEach(r => {
-    if (!voteMap[r.shop_id]) voteMap[r.shop_id] = {};
-    voteMap[r.shop_id][r.user_id] = r.type;
+    const key = Number(r.shop_id);
+    if (!info[key]) info[key] = { upvotes: 0, downvotes: 0, myVote: null, votes: {} };
+    const entry = info[key];
+    if (r.type === 'up') entry.upvotes++; else entry.downvotes++;
+    if (userId && r.user_id === userId) {
+      entry.myVote = r.type;
+      entry.votes[userId] = r.type;
+    } else {
+      entry.votes[`v${entry.upvotes + entry.downvotes}`] = r.type;
+    }
   });
 
   return shops.map(shop => {
-    shop.approved = !!shop.approved;
-    shop.id = Number(shop.id);
-    return { ...shop, votes: voteMap[shop.id] || {} };
+    const id = Number(shop.id);
+    const { upvotes = 0, downvotes = 0, myVote = null, votes = {} } = info[id] || {};
+    // created_by holds the creator's Google id, so it is not sent to clients.
+    const { created_by, ...rest } = shop;
+    return { ...rest, id, approved: !!shop.approved, mine: !!userId && created_by === userId, upvotes, downvotes, myVote, votes };
   });
 }
 
@@ -93,7 +108,7 @@ export async function getAllShops(userId) {
   } else {
     result = await pool.query(`SELECT * FROM shops WHERE approved = 1`);
   }
-  return await attachVotes(result.rows);
+  return await attachVotes(result.rows, userId);
 }
 
 export async function getPendingShops() {
@@ -150,7 +165,7 @@ export async function upsertVote(shopId, userId, type) {
   }
 
   const result = await pool.query(`SELECT * FROM shops WHERE id = $1`, [shopId]);
-  const shops = await attachVotes(result.rows);
+  const shops = await attachVotes(result.rows, userId);
   return shops[0];
 }
 

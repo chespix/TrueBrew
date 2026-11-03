@@ -27,13 +27,13 @@ const notify = async (msg) => {
 
 // ── Helpers ──
 
-const countVotes = (votes = {}) => ({
-  upvotes: Object.values(votes).filter(v => v === 'up').length,
-  downvotes: Object.values(votes).filter(v => v === 'down').length
+const countVotes = (shop) => ({
+  upvotes: shop?.upvotes || 0,
+  downvotes: shop?.downvotes || 0
 });
 
-const getDerivedStatus = (votes) => {
-  const { upvotes, downvotes } = countVotes(votes);
+const getDerivedStatus = (shop) => {
+  const { upvotes, downvotes } = countVotes(shop);
   if (upvotes > downvotes) return 'specialty';
   if (downvotes > upvotes) return 'fake';
   return 'unverified';
@@ -697,7 +697,7 @@ function App() {
 
             <MarkerClusterGroup chunkedLoading maxClusterRadius={45} showCoverageOnHover={false} iconCreateFunction={createClusterCustomIcon}>
               {shops.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.address?.toLowerCase().includes(searchQuery.toLowerCase())).map(shop => (
-                <Marker key={shop.id} position={[shop.lat, shop.lng]} icon={createIcon(getDerivedStatus(shop.votes))} eventHandlers={{ click: () => handleMarkerClick(shop) }} />
+                <Marker key={shop.id} position={[shop.lat, shop.lng]} icon={createIcon(getDerivedStatus(shop))} eventHandlers={{ click: () => handleMarkerClick(shop) }} />
               ))}
             </MarkerClusterGroup>
 
@@ -734,9 +734,9 @@ function App() {
         <div className={`details-panel ${isPanelOpen && !isAddMode ? 'open' : ''}`}>
           <div className="panel-handle" onClick={closePanel}></div>
           {selectedShop ? (() => {
-            const { upvotes, downvotes } = countVotes(selectedShop.votes);
-            const status = getDerivedStatus(selectedShop.votes);
-            const myVote = user ? selectedShop.votes?.[user.id] : null;
+            const { upvotes, downvotes } = countVotes(selectedShop);
+            const status = getDerivedStatus(selectedShop);
+            const myVote = user ? selectedShop.myVote : null;
 
             return (
               <>

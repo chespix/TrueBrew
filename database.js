@@ -1,13 +1,35 @@
 import pg from 'pg';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const { Pool } = pg;
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
+// ── SSL ──
+// Aiven signs its servers with a per-project CA (ca.pem in the repo root), so
+// for Aiven hosts we verify the server against it instead of trusting any
+// certificate. Other hosts keep the previous behavior (encrypted, unverified).
+// Escape hatches: DB_SSL=false (e.g. a local Postgres without SSL) and
+// DB_SSL_INSECURE=true (skip verification if the CA ever changes).
+function buildPoolConfig(databaseUrl) {
+  if (!databaseUrl) return {};
+  if (process.env.DB_SSL === 'false') return { connectionString: databaseUrl, ssl: false };
+
+  let url;
+  try { url = new URL(databaseUrl); } catch { return { connectionString: databaseUrl, ssl: { rejectUnauthorized: false } }; }
+  // sslmode in the URL would override the ssl option below, so drop it.
+  url.searchParams.delete('sslmode');
+  const connectionString = url.toString();
+
+  const caPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ca.pem');
+  const isAiven = url.hostname.endsWith('.aivencloud.com');
+  if (isAiven && process.env.DB_SSL_INSECURE !== 'true' && fs.existsSync(caPath)) {
+    return { connectionString, ssl: { rejectUnauthorized: true, ca: fs.readFileSync(caPath, 'utf8') } };
   }
-});
+  return { connectionString, ssl: { rejectUnauthorized: false } };
+}
+
+const pool = new Pool(buildPoolConfig(process.env.DATABASE_URL));
 
 export async function initDatabase() {
   await pool.query(`
@@ -68,21 +90,36 @@ export async function findOrCreateUser(googleId, email, name, picture, adminEmai
 
 // ── Shop Operations ──
 
-async function attachVotes(shops) {
+// Attaches vote info to each shop without exposing who voted or who created it.
+// - upvotes / downvotes / myVote: used by current clients.
+// - votes: anonymized map kept for older app versions still installed. It has
+//   one entry per vote, keyed by an opaque index, except the requesting user's
+//   own vote, which stays keyed by their id so old clients can still show it.
+async function attachVotes(shops, userId = null) {
   if (shops.length === 0) return shops;
   const shopIds = shops.map(s => s.id);
   const { rows } = await pool.query(`SELECT shop_id, user_id, type FROM votes WHERE shop_id = ANY($1)`, [shopIds]);
-  
-  const voteMap = {};
+
+  const info = {};
   rows.forEach(r => {
-    if (!voteMap[r.shop_id]) voteMap[r.shop_id] = {};
-    voteMap[r.shop_id][r.user_id] = r.type;
+    const key = Number(r.shop_id);
+    if (!info[key]) info[key] = { upvotes: 0, downvotes: 0, myVote: null, votes: {} };
+    const entry = info[key];
+    if (r.type === 'up') entry.upvotes++; else entry.downvotes++;
+    if (userId && r.user_id === userId) {
+      entry.myVote = r.type;
+      entry.votes[userId] = r.type;
+    } else {
+      entry.votes[`v${entry.upvotes + entry.downvotes}`] = r.type;
+    }
   });
 
   return shops.map(shop => {
-    shop.approved = !!shop.approved;
-    shop.id = Number(shop.id);
-    return { ...shop, votes: voteMap[shop.id] || {} };
+    const id = Number(shop.id);
+    const { upvotes = 0, downvotes = 0, myVote = null, votes = {} } = info[id] || {};
+    // created_by holds the creator's Google id, so it is not sent to clients.
+    const { created_by, ...rest } = shop;
+    return { ...rest, id, approved: !!shop.approved, mine: !!userId && created_by === userId, upvotes, downvotes, myVote, votes };
   });
 }
 
@@ -93,7 +130,7 @@ export async function getAllShops(userId) {
   } else {
     result = await pool.query(`SELECT * FROM shops WHERE approved = 1`);
   }
-  return await attachVotes(result.rows);
+  return await attachVotes(result.rows, userId);
 }
 
 export async function getPendingShops() {
@@ -108,24 +145,24 @@ export async function createShop({ name, lat, lng, address, details, approved, c
     [id, name, lat, lng, address || '', details || '', approved ? 1 : 0, createdBy]
   );
   const result = await pool.query(`SELECT * FROM shops WHERE id = $1`, [id]);
-  const shops = await attachVotes(result.rows);
+  const shops = await attachVotes(result.rows, createdBy);
   return shops[0];
 }
 
-export async function updateShop(id, { name, address, details }) {
+export async function updateShop(id, { name, address, details }, userId = null) {
   await pool.query(
     `UPDATE shops SET name = COALESCE($1, name), address = COALESCE($2, address), details = COALESCE($3, details) WHERE id = $4`,
     [name, address, details, id]
   );
   const result = await pool.query(`SELECT * FROM shops WHERE id = $1`, [id]);
-  const shops = await attachVotes(result.rows);
+  const shops = await attachVotes(result.rows, userId);
   return shops[0];
 }
 
-export async function approveShop(id) {
+export async function approveShop(id, userId = null) {
   await pool.query(`UPDATE shops SET approved = 1 WHERE id = $1`, [id]);
   const result = await pool.query(`SELECT * FROM shops WHERE id = $1`, [id]);
-  const shops = await attachVotes(result.rows);
+  const shops = await attachVotes(result.rows, userId);
   return shops[0];
 }
 
@@ -146,11 +183,13 @@ export async function upsertVote(shopId, userId, type) {
       await pool.query(`UPDATE votes SET type = $1 WHERE shop_id = $2 AND user_id = $3`, [type, shopId, userId]);
     }
   } else {
+    const exists = await pool.query(`SELECT 1 FROM shops WHERE id = $1`, [shopId]);
+    if (exists.rows.length === 0) return undefined;
     await pool.query(`INSERT INTO votes (shop_id, user_id, type) VALUES ($1, $2, $3)`, [shopId, userId, type]);
   }
 
   const result = await pool.query(`SELECT * FROM shops WHERE id = $1`, [shopId]);
-  const shops = await attachVotes(result.rows);
+  const shops = await attachVotes(result.rows, userId);
   return shops[0];
 }
 

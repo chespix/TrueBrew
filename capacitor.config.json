@@ -3,10 +3,13 @@
   "appName": "TrueBrew",
   "webDir": "dist",
   "plugins": {
-    "GoogleAuth": {
-      "scopes": ["profile", "email"],
-      "serverClientId": "646062898063-it6q6muu8aaju4m6rluktnvhvfsmbjvt.apps.googleusercontent.com",
-      "forceCodeForRefreshToken": true
+    "SocialLogin": {
+      "providers": {
+        "google": true,
+        "facebook": false,
+        "apple": false,
+        "twitter": false
+      }
     },
     "SplashScreen": {
       "launchShowDuration": 3000,

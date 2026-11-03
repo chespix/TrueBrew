@@ -1,9 +1,10 @@
-
-# 100% vibecoded project experiment.
-
 # ☕ TrueBrew
 
-**TrueBrew** es un mapa colaborativo de cafés de especialidad diseñado para Buenos Aires (CABA) y pensado principalmente para uso móvil. Permite a los amantes del café verificar si las cafeterías locales realmente sirven "Café de Especialidad" o no, confiando enteramente en un modelo de consenso impulsado por la comunidad mediante votos a favor y en contra.
+> Proyecto experimental, 100% "vibecodeado".
+
+**TrueBrew** es un mapa colaborativo de cafés de especialidad en Buenos Aires (CABA), pensado principalmente para el celular. La comunidad vota si cada cafetería sirve realmente "café de especialidad" o no, y el mapa muestra el resultado.
+
+🌐 **Web:** https://truebrew-nsy9.onrender.com/ (el plan gratuito de Render tarda unos segundos en despertar)
 
 ![Interfaz de la app TrueBrew](assets/features.png)
 
@@ -11,91 +12,131 @@
 
 ## ✨ Características
 
-- 🗺️ **Mapa Oscuro Interactivo:** Explora CABA utilizando un mapa base premium y oscuro de CARTO, integrado junto con React-Leaflet.
-- 👍 **Verificación Colaborativa:** Inicia sesión para votar. Las cafeterías con un balance positivo de votos se visualizan como verificadas (Verde), las que tienen saldo negativo se marcan como falsas (Rojo) y los empates/lugares sin votos permanecen pendientes (Naranja).
-- 📍 **Agregar Locales y Geolocalización:** Los usuarios pueden agregar nuevas cafeterías directamente desde su ubicación física mediante rastreo nativo de GPS.
-- 🛡️ **Panel de Moderación por Roles:** Las cuentas de administradores tienen acceso exclusivo a un panel de "Pendientes" para revisar de manera proactiva, editar, aprobar o rechazar los envíos de la comunidad.
-- 🔐 **Autenticación Nativa de Google (OAuth):** Inicio de sesión con un solo toque utilizando las APIs nativas de Identidad en Android gracias a Capacitor, y respaldado por una alternativa web inteligente para su uso desde el navegador.
-- 🧱 **Protección DDoS:** Los endpoints de la API están estrictamente asegurados con `express-rate-limit` para prevenir ataques de spam malintencionados.
+- 🗺️ **Mapa interactivo** con tiles de OpenStreetMap y React-Leaflet, con modo claro y oscuro (el oscuro es un filtro CSS sobre los tiles).
+- 👍 **Verificación colaborativa:** con sesión iniciada podés votar. Más votos a favor que en contra = verificado (verde), más en contra = falso (rojo), empate o sin votos = pendiente (naranja). La API solo publica los conteos, nunca quién votó.
+- 📍 **Agregar locales:** tocando el mapa, desde tu ubicación GPS, buscando la cafetería en Overture Maps o buscando una dirección (Nominatim / OpenStreetMap).
+- 🛡️ **Moderación:** los locales que agrega un usuario quedan pendientes hasta que un admin los aprueba. Los admins también pueden editar y eliminar.
+- 🔐 **Login con Google:** nativo en Android (Credential Manager vía `@capgo/capacitor-social-login`) y con Google Identity Services en la web (`@react-oauth/google`).
+- 🧱 **Límites de uso:** `express-rate-limit` limita los pedidos por IP (300 cada 15 minutos para la API, 20 locales nuevos por hora).
 
-## 💻 Tecnologías Utilizadas
+## 💻 Tecnologías
 
-- **Frontend:** React + Vite
-- **Integración de Mapas:** Leaflet (`react-leaflet`)
-- **Backend:** Node.js + Express
-- **Base de Datos:** PostgreSQL (alojada en Aiven Cloud)
-- **Contenedor Móvil (Wrapper):** Capacitor.js (`@capacitor/core`, `@capacitor/google-auth`, `@capacitor/geolocation`)
-- **Hosting / Despliegue:** Render.com (Sirve la SPA monolítica junto con la API)
+- **Frontend:** React + Vite, Leaflet (`react-leaflet`, `react-leaflet-cluster`)
+- **Backend:** Node.js + Express (sirve la API y, en producción, la SPA compilada)
+- **Base de datos:** PostgreSQL (Aiven)
+- **App móvil:** Capacitor 8 (Android)
+- **Hosting:** Render.com
 
-## 🚀 Guía de Instalación Local
+## 📁 Estructura
 
-### 1. Requisitos Previos
-Asegúrate de tener instalado **Node.js 20+** y contar con una conexión a una base de datos **PostgreSQL**.
+```
+server.js            API Express (auth, locales, votos, moderación, búsquedas)
+database.js          Acceso a Postgres y creación de tablas
+src/App.jsx          Estado y lógica principal de la app
+src/components/      Pantallas: TopNav, SearchBar, ShopDetails, modales...
+src/map/             Íconos de marcadores y controles del mapa
+src/lib/             Helpers (notificaciones, estado según votos)
+src/data/mockShops.js  Cafés iniciales para el seed
+scripts/             Utilidades (importar cafés desde OpenStreetMap)
+tests/               Tests de la API
+android/             Proyecto nativo de Capacitor
+```
+
+## 🚀 Instalación local
+
+### 1. Requisitos
+
+- **Node.js 22+**
+- Una base **PostgreSQL** (local o en la nube)
 
 ### 2. Instalación
-Clona el repositorio e instala las dependencias utilizando el modo "legacy" para evitar conflictos de versiones entre dependencias de Capacitor:
+
 ```bash
 git clone https://github.com/chespix/TrueBrew.git
 cd TrueBrew
-npm install --legacy-peer-deps
+npm install
 ```
 
-### 3. Variables de Entorno
-Crea un archivo `.env` en el directorio principal del proyecto:
+### 3. Variables de entorno
+
+Creá un archivo `.env` en la raíz:
+
 ```env
 # Servidor
 PORT=3001
-NODE_ENV=development
 
-# URI Base de Datos Postgres
-DATABASE_URL=postgres://usuario:contraseña@hostname:port/dbname
+# Postgres
+DATABASE_URL=postgres://usuario:contraseña@host:puerto/basededatos
+# DB_SSL=false            # para un Postgres local sin SSL
+# DB_SSL_INSECURE=true    # no verificar el certificado (solo si hace falta)
 
-# Autenticación y Seguridad
-JWT_SECRET=tu_clave_secreta_jwt_super_segura
-GOOGLE_CLIENT_ID=el_id_de_tu_cliente_web.apps.googleusercontent.com
+# Autenticación
+JWT_SECRET=una_clave_larga_y_aleatoria
+GOOGLE_CLIENT_ID=tu_client_id_web.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID=tu_client_id_web.apps.googleusercontent.com
 
-# Administradores permitidos (Separados por coma)
+# Admins (separados por coma)
 ADMIN_EMAILS=usuario1@gmail.com,usuario2@gmail.com
 
-# URL Base para la API (Dejar vacío para nivel local, o poner la URL de Render para compilar la app)
-VITE_API_URL=http://localhost:3001
+# Opcionales
+# OVERTURE_API_KEY=...        # sin esto se usa la clave DEMO de Overture
+# CONTACT_EMAIL=vos@mail.com  # se agrega al User-Agent de Nominatim
+# TRUST_PROXY=1               # saltos de proxy delante del server (Render = 1)
+
+# URL de la API para builds de Android (vacío en desarrollo web: Vite hace de proxy)
+# VITE_API_URL=https://truebrew-nsy9.onrender.com
 ```
 
-### 4. Ejecución del Servidor e Inicialización de Datos (Seed)
-Para que Postgres genere las tablas (schema automáticamente), inyecte cafeterías de prueba (mock) en la base de datos e inicie simultáneamente Vite y Express:
+Si la base es de Aiven, la conexión se verifica con el certificado `ca.pem` del repo.
+
+### 4. Ejecutar
+
 ```bash
-npm run dev:seed
+npm run dev:seed   # crea las tablas, carga los cafés iniciales si la base está vacía y levanta Vite + Express
+npm run dev        # lo mismo, sin seed
 ```
-*La aplicación estará accesible a través de tu navegador Web en `http://localhost:5173/`.*
+
+La app queda en `https://localhost:5173/` (Vite usa un certificado autofirmado para que funcione la geolocalización; aceptá la advertencia del navegador).
+
+### 5. Lint y tests
+
+```bash
+npm run lint
+DATABASE_URL=postgres://... npm test   # ¡usa una base descartable! Los tests borran las tablas
+```
+
+GitHub Actions corre lint, build y tests en cada push a `main` y en cada PR (`.github/workflows/ci.yml`).
+
+### Otros scripts
+
+- `npm run fetch:cafes`: baja de OpenStreetMap los cafés de CABA con nombres tipo "specialty", "coffee", "tostador" y reescribe `src/data/mockShops.js`.
+- `npm start`: arranca el server en modo producción (sirve `dist/`). Corré `npm run build` antes.
 
 ---
 
-## 📱 Desarrollo para Android (Capacitor)
-
-Dado que TrueBrew utiliza Capacitor, la aplicación construida con React se traduce limpiamente en una aplicación nativa basada en Java para Android.
+## 📱 Android (Capacitor)
 
 ```bash
-# 1. Compila la Aplicación React en Producción
-npm run build
-
-# 2. Sincroniza la carpeta dist/ hacia la carpeta nativa /assets en Android
-npx cap sync
-
-# 3. Abre Android Studio para compilar un AAB / APK
+npm run build      # compila la app web (con VITE_API_URL apuntando a Render)
+npx cap sync       # copia dist/ y los plugins al proyecto Android
 npx cap open android
 ```
 
-### Notas Importantes para Desarrollo Nativo
-- **Autenticación con Google:** Para hacer funcionar el flujo de inicio de sesión en un teléfono Android (o emulador), DEBES registrar las huellas digitales (fingerprints) de firma `SHA-1` debug/producción de tu aplicación dentro de Google Cloud Console (bajo Categoría de Android Oauth).
-- **Integraciones con Hardware Móvil:** La aplicación incluye nativamente `@capacitor/status-bar` y `@capacitor/app` para capturar la pulsación del botón físico "Atrás" en los dispositivos Android, y alterar inteligentemente el color de la barra principal del dispositivo.
+Desde Android Studio: **Build → Generate Signed App Bundle** con tu upload key (las claves no están en el repo).
+
+**Versionado:** antes de cada release actualizá `versionCode` (+1) y `versionName` en `android/app/build.gradle`, y `version` en `package.json`.
+
+**Login con Google en Android:** el plugin usa el **Client ID web** (`webClientId`) para pedir el token. En Google Cloud Console, en el mismo proyecto, tiene que haber un cliente OAuth **Android** con el package `app.truebrew.caba` y el SHA-1 de cada certificado que firma la app: debug, upload key y el de **Play App Signing** (Play Console → Integridad de la app). Si falla, filtrá Logcat por `GoogleProvider`.
 
 ---
 
-## ☁️ Despliegue y Producción (Web: Render)
+## ☁️ Deploy (Render)
 
-TrueBrew está listo para salir a producción en la plataforma Render. El archivo `render.yaml` administra la infraestructura completa automáticamente.
+`render.yaml` define el servicio web:
 
-1. Conecta tu repositorio recién enviado de GitHub a tu cuenta de Render.
-2. Selecciona la opción "Blueprint" (o simplemente levanta un Web Service y vincula el Repositorio de GitHub de TrueBrew).
-3. El proceso de instalación utiliza `npm install --include=dev && npm run build` intencionalmente para evitar que Render elimine `vite` durante el proceso de instalación de producción.
-4. Por código, Express intersecta automáticamente la señal `process.env.NODE_ENV === 'production'` sirviendo directamente los archivos visuales compilados e inyectando la app de React en el internet a través de `dist/`.
+1. Conectá el repo en Render como **Blueprint** (o creá un Web Service a mano con los mismos comandos).
+2. Build: `npm install --include=dev && npm run build` (incluye dev dependencies porque Vite hace falta para compilar).
+3. Start: `node server.js --seed` (el seed solo carga datos si la base está vacía).
+4. Cargá las variables `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `ADMIN_EMAILS` y, si querés, `OVERTURE_API_KEY` y `CONTACT_EMAIL`. `JWT_SECRET` lo genera Render.
+
+Para que la base no se duerma podés pegarle a `GET /api/ping` periódicamente (por ejemplo con un cron externo).

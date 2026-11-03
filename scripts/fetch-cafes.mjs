@@ -1,3 +1,7 @@
+// Downloads cafés from OpenStreetMap (Overpass API) whose name suggests
+// specialty coffee and rewrites src/data/mockShops.js, used to seed the DB.
+// Run from the repo root: npm run fetch:cafes
+
 import https from 'https';
 import fs from 'fs';
 

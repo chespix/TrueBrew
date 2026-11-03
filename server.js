@@ -291,52 +291,80 @@ const CABA_LAT = -34.6037;
 const CABA_LON = -58.3816;
 const CABA_RADIUS = 15000;
 
+// The request to Overture is always the same (every coffee shop in CABA, up
+// to 1500), only the local filter changes. So the list is downloaded once and
+// kept in memory for a few hours instead of on every keystroke.
+const OVERTURE_CACHE_MS = 6 * 60 * 60 * 1000;
+let overtureCache = { places: null, fetchedAt: 0 };
+let overtureInflight = null;
+
+// Lowercase and strip accents, so "cafe" matches "Café".
+const normalize = (str) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+async function fetchOverturePlaces() {
+  const url = new URL('https://api.overturemapsapi.com/places');
+  url.searchParams.set('lat', CABA_LAT);
+  url.searchParams.set('lng', CABA_LON);
+  url.searchParams.set('radius', CABA_RADIUS);
+  url.searchParams.set('categories', 'coffee_shop');
+  url.searchParams.set('country', 'AR');
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('limit', '1500');
+
+  const response = await fetch(url.toString(), {
+    headers: { 'x-api-key': OVERTURE_API_KEY },
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!response.ok) {
+    throw new Error(`Overture API ${response.status}: ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  const raw = Array.isArray(data) ? data : (data.places || data.features || []);
+  return raw
+    .map(p => {
+      const coords = p?.geometry?.coordinates || [];
+      const props = p?.properties || {};
+      const name = props?.names?.primary || props?.ext_name || props?.name || '';
+      const addr = props?.addresses;
+      const address = (Array.isArray(addr) ? addr[0]?.freeform : addr?.freeform) || '';
+      return { overtureId: p.id, name, search: normalize(name), address, lat: coords[1] ?? null, lng: coords[0] ?? null };
+    })
+    .filter(p => p.name && p.lat !== null && p.lng !== null);
+}
+
+async function getOverturePlaces() {
+  const fresh = overtureCache.places && Date.now() - overtureCache.fetchedAt < OVERTURE_CACHE_MS;
+  if (fresh) return overtureCache.places;
+  if (!overtureInflight) {
+    overtureInflight = fetchOverturePlaces()
+      .then(places => {
+        if (places.length > 0) overtureCache = { places, fetchedAt: Date.now() };
+        return places;
+      })
+      .finally(() => { overtureInflight = null; });
+  }
+  try {
+    return await overtureInflight;
+  } catch (e) {
+    // If the refresh fails, keep serving the old list rather than nothing.
+    if (overtureCache.places) return overtureCache.places;
+    throw e;
+  }
+}
+
 app.get('/api/search/overture', optionalAuth, async (req, res) => {
-  const q = (req.query.q || '').trim().toLowerCase();
+  const q = normalize((req.query.q || '').toString().trim()).slice(0, 100);
   if (q.length < 3) return res.json([]);
 
   try {
-    const url = new URL('https://api.overturemapsapi.com/places');
-    url.searchParams.set('lat', CABA_LAT);
-    url.searchParams.set('lng', CABA_LON);       // correct param is lng not lon
-    url.searchParams.set('radius', CABA_RADIUS);
-    url.searchParams.set('categories', 'coffee_shop'); // plural
-    url.searchParams.set('country', 'AR');
-    url.searchParams.set('format', 'json');
-    url.searchParams.set('limit', '1500');
-
-    const response = await fetch(url.toString(), {
-      headers: { 'x-api-key': OVERTURE_API_KEY }
-    });
-
-    if (!response.ok) {
-      console.error('Overture API error:', response.status, await response.text());
-      return res.json([]);
-    }
-
-    const data = await response.json();
-    const places = Array.isArray(data) ? data : (data.places || data.features || []);
-
-    // Filter, score and rank by relevance
+    const places = await getOverturePlaces();
+    // Names that start with the query come first.
     const results = places
-      .filter(p => {
-        const name = (p?.properties?.names?.primary || p?.properties?.ext_name || p?.properties?.name || '').toLowerCase();
-        return name.includes(q);
-      })
-      .map(p => {
-        const coords = p?.geometry?.coordinates || [];
-        const props = p?.properties || {};
-        const name = props?.names?.primary || props?.ext_name || props?.name || 'Sin nombre';
-        const lname = name.toLowerCase();
-        const addr = props?.addresses;
-        const address = (Array.isArray(addr) ? addr[0]?.freeform : addr?.freeform) || '';
-        const score = lname.startsWith(q) ? 0 : 1;
-        return { overtureId: p.id, name, address, lat: coords[1] ?? null, lng: coords[0] ?? null, score };
-      })
-      .filter(p => p.lat !== null && p.lng !== null)
-      .sort((a, b) => a.score - b.score)
+      .filter(p => p.search.includes(q))
+      .sort((a, b) => Number(!a.search.startsWith(q)) - Number(!b.search.startsWith(q)))
       .slice(0, 10)
-      .map(({ score, ...rest }) => rest);
+      .map(({ overtureId, name, address, lat, lng }) => ({ overtureId, name, address, lat, lng }));
 
     res.json(results);
   } catch (e) {

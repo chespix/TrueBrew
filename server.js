@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -17,7 +18,18 @@ const app = express();
 // a single rate-limit bucket. TRUST_PROXY is the number of proxy hops.
 app.set('trust proxy', parseInt(process.env.TRUST_PROXY || '1', 10));
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'truebrew-fallback-secret';
+// The old hardcoded fallback secret let anyone sign their own admin token.
+// If JWT_SECRET is missing we now derive one from DATABASE_URL, which already
+// contains the DB password, so it is secret and stable across restarts.
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (!process.env.DATABASE_URL) {
+    console.error('❌ Faltan JWT_SECRET y DATABASE_URL.');
+    process.exit(1);
+  }
+  JWT_SECRET = crypto.createHash('sha256').update(`truebrew-jwt:${process.env.DATABASE_URL}`).digest('hex');
+  console.warn('⚠️  JWT_SECRET no configurado: usando uno derivado de DATABASE_URL. Configuralo en Render.');
+}
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, ZoomControl, useMapEvents, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
-import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { SocialLogin } from '@capgo/capacitor-social-login';
 import { Coffee, AlertTriangle, ChevronDown, Check, X, Plus, MapPin, ThumbsUp, ThumbsDown, Trash2, LocateFixed, LogOut, Edit3, ShieldAlert, Download, Search, RefreshCw, Sun, Moon, User } from 'lucide-react';
 import { API_BASE } from './config';
 import { Geolocation } from '@capacitor/geolocation';
@@ -15,7 +15,7 @@ import { Dialog } from '@capacitor/dialog';
 import { GoogleLogin } from '@react-oauth/google';
 import 'leaflet/dist/leaflet.css';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'fallback-client-id';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '646062898063-it6q6muu8aaju4m6rluktnvhvfsmbjvt.apps.googleusercontent.com';
 
 const notify = async (msg) => {
   if (Capacitor.isNativePlatform()) {
@@ -302,18 +302,21 @@ function App() {
 
   // ── Auth Handlers ──
 
+  // Native Android login. On the web, @react-oauth/google's <GoogleLogin> is used instead.
+  // webClientId must be the *Web* OAuth client id (the backend verifies the token against it).
   useEffect(() => {
-    GoogleAuth.initialize({
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: ['profile', 'email'],
-      grantOfflineAccess: true,
-    });
+    if (!Capacitor.isNativePlatform()) return;
+    SocialLogin.initialize({
+      google: { webClientId: GOOGLE_CLIENT_ID, mode: 'online' },
+    }).catch(e => console.error('SocialLogin init error:', e));
   }, []);
 
   const handleNativeGoogleLogin = async () => {
     try {
-      const googleUser = await GoogleAuth.signIn();
-      await executeBackendLogin(googleUser.authentication.idToken);
+      const res = await SocialLogin.login({ provider: 'google', options: {} });
+      const idToken = res?.result?.idToken;
+      if (!idToken) throw new Error('Google no devolvió un idToken.');
+      await executeBackendLogin(idToken);
     } catch (e) {
       console.error(e);
       notify("Error al iniciar sesión con Google: " + (e.message || JSON.stringify(e)));

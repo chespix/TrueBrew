@@ -123,24 +123,24 @@ export async function createShop({ name, lat, lng, address, details, approved, c
     [id, name, lat, lng, address || '', details || '', approved ? 1 : 0, createdBy]
   );
   const result = await pool.query(`SELECT * FROM shops WHERE id = $1`, [id]);
-  const shops = await attachVotes(result.rows);
+  const shops = await attachVotes(result.rows, createdBy);
   return shops[0];
 }
 
-export async function updateShop(id, { name, address, details }) {
+export async function updateShop(id, { name, address, details }, userId = null) {
   await pool.query(
     `UPDATE shops SET name = COALESCE($1, name), address = COALESCE($2, address), details = COALESCE($3, details) WHERE id = $4`,
     [name, address, details, id]
   );
   const result = await pool.query(`SELECT * FROM shops WHERE id = $1`, [id]);
-  const shops = await attachVotes(result.rows);
+  const shops = await attachVotes(result.rows, userId);
   return shops[0];
 }
 
-export async function approveShop(id) {
+export async function approveShop(id, userId = null) {
   await pool.query(`UPDATE shops SET approved = 1 WHERE id = $1`, [id]);
   const result = await pool.query(`SELECT * FROM shops WHERE id = $1`, [id]);
-  const shops = await attachVotes(result.rows);
+  const shops = await attachVotes(result.rows, userId);
   return shops[0];
 }
 
@@ -161,6 +161,8 @@ export async function upsertVote(shopId, userId, type) {
       await pool.query(`UPDATE votes SET type = $1 WHERE shop_id = $2 AND user_id = $3`, [type, shopId, userId]);
     }
   } else {
+    const exists = await pool.query(`SELECT 1 FROM shops WHERE id = $1`, [shopId]);
+    if (exists.rows.length === 0) return undefined;
     await pool.query(`INSERT INTO votes (shop_id, user_id, type) VALUES ($1, $2, $3)`, [shopId, userId, type]);
   }
 

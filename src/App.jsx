@@ -440,11 +440,11 @@ function App() {
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ ...newFormDetails, lat: newLocationDraft.lat, lng: newLocationDraft.lng })
       });
-      if (!res.ok) throw new Error();
-      const created = await res.json();
-      setShops(prev => [...prev, created]);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error);
+      setShops(prev => [...prev, data]);
       cancelAddLocation();
-    } catch (e) { notify("Error al guardar local."); }
+    } catch (e) { notify(e.message || "Error al guardar local."); }
   };
 
   const startEditing = () => {

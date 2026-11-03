@@ -78,6 +78,68 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// ── Validation helpers ──
+
+// Logs the real error and sends a generic message, so DB details never reach clients.
+function serverError(res, e) {
+  console.error(e);
+  res.status(500).json({ error: "Error interno del servidor." });
+}
+
+function parseId(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    res.status(400).json({ error: "ID inválido." });
+    return null;
+  }
+  return id;
+}
+
+// Optional text field: undefined stays undefined (means "don't change"),
+// otherwise it must be a string up to maxLen characters.
+function optionalText(value, maxLen) {
+  if (value === undefined || value === null) return { ok: true, value: undefined };
+  if (typeof value !== 'string') return { ok: false };
+  const trimmed = value.trim();
+  if (trimmed.length > maxLen) return { ok: false };
+  return { ok: true, value: trimmed };
+}
+
+const LIMITS = { name: 100, address: 200, details: 1000 };
+
+// Generous box around Buenos Aires (CABA + conurbano).
+const BOUNDS = { minLat: -35.2, maxLat: -34.2, minLng: -59.2, maxLng: -57.8 };
+
+function validateShopInput(body, { requireAll }) {
+  const out = {};
+  for (const field of ['name', 'address', 'details']) {
+    const r = optionalText(body[field], LIMITS[field]);
+    if (!r.ok) return { error: `Campo "${field}" inválido (máx. ${LIMITS[field]} caracteres).` };
+    out[field] = r.value;
+  }
+  if (requireAll) {
+    if (!out.name) return { error: "El nombre es obligatorio." };
+    const lat = Number(body.lat);
+    const lng = Number(body.lng);
+    if (body.lat === null || body.lng === null || !Number.isFinite(lat) || !Number.isFinite(lng) ||
+        lat < BOUNDS.minLat || lat > BOUNDS.maxLat || lng < BOUNDS.minLng || lng > BOUNDS.maxLng) {
+      return { error: "Ubicación inválida o fuera de Buenos Aires." };
+    }
+    out.lat = lat;
+    out.lng = lng;
+  } else if (out.name === '') {
+    return { error: "El nombre no puede quedar vacío." };
+  }
+  return { value: out };
+}
+
+// Stricter limit for creating shops, to slow down spam of pending entries.
+const createShopLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  message: { error: 'Agregaste muchos locales seguidos. Probá de nuevo en un rato.' }
+});
+
 // ── Routes ──
 
 // ── Keepalive / Health check (no auth required) ──
@@ -92,13 +154,15 @@ app.get('/api/ping', async (req, res) => {
       db_response_ms: dbMs
     });
   } catch (e) {
-    res.status(500).json({ status: 'error', message: e.message });
+    console.error('Ping error:', e);
+    res.status(500).json({ status: 'error' });
   }
 });
 
 app.post('/api/auth/google', async (req, res) => {
   try {
-    const { credential } = req.body;
+    const credential = req.body?.credential;
+    if (typeof credential !== 'string' || !credential) return res.status(400).json({ error: "Falta la credencial." });
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
       audience: GOOGLE_CLIENT_ID
@@ -126,57 +190,63 @@ app.get('/api/shops', optionalAuth, async (req, res) => {
     const shops = await getAllShops(req.user?.id);
     res.json(shops);
   } catch (e) {
-    res.status(500).json({ error: "Error en la base de datos" });
+    serverError(res, e);
   }
 });
 
-app.post('/api/shops', authenticateToken, async (req, res) => {
+app.post('/api/shops', authenticateToken, createShopLimiter, async (req, res) => {
+  const { value, error } = validateShopInput(req.body || {}, { requireAll: true });
+  if (error) return res.status(400).json({ error });
   try {
     const isAdmin = req.user.role === 'admin';
     const shop = await createShop({
-      name: req.body.name,
-      lat: req.body.lat,
-      lng: req.body.lng,
-      address: req.body.address,
-      details: req.body.details,
+      ...value,
       approved: isAdmin,
       createdBy: req.user.id
     });
     res.status(201).json(shop);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
 app.patch('/api/shops/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const id = parseId(req, res);
+  if (id === null) return;
+  const { value, error } = validateShopInput(req.body || {}, { requireAll: false });
+  if (error) return res.status(400).json({ error });
   try {
-    const id = parseInt(req.params.id, 10);
-    const shop = await updateShop(id, req.body);
+    const shop = await updateShop(id, value, req.user.id);
     if (!shop) return res.status(404).json({ error: "Local no encontrado" });
     res.json(shop);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
 app.delete('/api/shops/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const id = parseId(req, res);
+  if (id === null) return;
   try {
-    await deleteShop(parseInt(req.params.id, 10));
+    await deleteShop(id);
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
 // Voting
 app.put('/api/shops/:id/vote', authenticateToken, async (req, res) => {
+  const shopId = parseId(req, res);
+  if (shopId === null) return;
+  const type = req.body?.type;
+  if (type !== 'up' && type !== 'down') return res.status(400).json({ error: "Voto inválido." });
   try {
-    const shopId = parseInt(req.params.id, 10);
-    const shop = await upsertVote(shopId, req.user.id, req.body.type);
+    const shop = await upsertVote(shopId, req.user.id, type);
     if (!shop) return res.status(404).json({ error: "Local no encontrado" });
     res.json(shop);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -186,17 +256,19 @@ app.get('/api/admin/pending', authenticateToken, requireAdmin, async (req, res) 
     const shops = await getPendingShops();
     res.json(shops);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
 app.patch('/api/shops/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+  const id = parseId(req, res);
+  if (id === null) return;
   try {
-    const shop = await approveShop(parseInt(req.params.id, 10));
+    const shop = await approveShop(id, req.user.id);
     if (!shop) return res.status(404).json({ error: "Local no encontrado" });
     res.json(shop);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -208,7 +280,7 @@ app.post('/api/reset', authenticateToken, requireAdmin, async (req, res) => {
     const shops = await getAllShops();
     res.json({ success: true, count: shops.length });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 

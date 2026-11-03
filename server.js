@@ -11,6 +11,11 @@ import {
 } from './database.js';
 
 const app = express();
+
+// Render (and most hosts) put the app behind a proxy. Without this, every
+// request looks like it comes from the proxy's IP, so all users would share
+// a single rate-limit bucket. TRUST_PROXY is the number of proxy hops.
+app.set('trust proxy', parseInt(process.env.TRUST_PROXY || '1', 10));
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'truebrew-fallback-secret';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;

@@ -7,7 +7,7 @@
     "dev": "concurrently \"vite --host\" \"node server.js\"",
     "dev:seed": "concurrently \"vite --host\" \"node server.js --seed\"",
     "build": "vite build",
-    "start": "NODE_ENV=production node server.js",
+    "start": "node server.js --production",
     "lint": "eslint .",
     "preview": "vite preview",
     "fetch:cafes": "node scripts/fetch-cafes.mjs",

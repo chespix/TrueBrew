@@ -463,7 +463,8 @@ app.get('/api/search/geocode', optionalAuth, async (req, res) => {
 });
 
 // ── Production: Serve static frontend ──
-if (process.env.NODE_ENV === 'production') {
+// `npm start` passes --production so it also works on Windows (no NODE_ENV=... syntax).
+if (process.env.NODE_ENV === 'production' || process.argv.includes('--production')) {
   import('path').then(pathModule => {
     import('url').then(urlModule => {
       const __dirname = pathModule.dirname(urlModule.fileURLToPath(import.meta.url));

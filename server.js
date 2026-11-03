@@ -374,9 +374,27 @@ app.get('/api/search/overture', optionalAuth, async (req, res) => {
 });
 
 // ── Geocoding Search Proxy ──
+// Nominatim's usage policy asks for an identifying User-Agent with real
+// contact info, at most 1 request per second, and caching of results.
+const NOMINATIM_USER_AGENT = `TrueBrew/1.0 (+https://github.com/chespix/TrueBrew${process.env.CONTACT_EMAIL ? `; ${process.env.CONTACT_EMAIL}` : ''})`;
+const GEOCODE_CACHE_MS = 24 * 60 * 60 * 1000;
+const GEOCODE_CACHE_MAX = 500;
+const geocodeCache = new Map(); // query -> { results, at }
+let lastNominatimCall = 0;
+
 app.get('/api/search/geocode', optionalAuth, async (req, res) => {
-  const q = (req.query.q || '').trim();
+  const q = (req.query.q || '').toString().trim().slice(0, 200);
   if (q.length < 3) return res.json([]);
+
+  const cacheKey = q.toLowerCase();
+  const cached = geocodeCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < GEOCODE_CACHE_MS) return res.json(cached.results);
+
+  // Stay under 1 request per second across all users.
+  const wait = lastNominatimCall + 1000 - Date.now();
+  if (wait > 5000) return res.json([]); // too busy, skip rather than queue forever
+  lastNominatimCall = Math.max(Date.now(), lastNominatimCall + 1000);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
 
   try {
     const url = new URL('https://nominatim.openstreetmap.org/search');
@@ -390,8 +408,9 @@ app.get('/api/search/geocode', optionalAuth, async (req, res) => {
 
     const response = await fetch(url.toString(), {
       headers: {
-        'User-Agent': 'TrueBrewApp/1.0 (contact@truebrew.example.com)'
-      }
+        'User-Agent': NOMINATIM_USER_AGENT
+      },
+      signal: AbortSignal.timeout(10000)
     });
 
     if (!response.ok) {
@@ -432,6 +451,10 @@ app.get('/api/search/geocode', optionalAuth, async (req, res) => {
       lng: parseFloat(item.lon)
     })).filter(item => !isNaN(item.lat) && !isNaN(item.lng));
 
+    if (geocodeCache.size >= GEOCODE_CACHE_MAX) {
+      geocodeCache.delete(geocodeCache.keys().next().value); // drop the oldest
+    }
+    geocodeCache.set(cacheKey, { results, at: Date.now() });
     res.json(results);
   } catch (e) {
     console.error('Geocoding search error:', e);

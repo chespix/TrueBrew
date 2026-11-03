@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, ZoomControl, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, ZoomControl, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
 import { SocialLogin } from '@capgo/capacitor-social-login';
@@ -119,10 +119,10 @@ function LocateControl({ setUserLocation }) {
             setUserLocation(latlng);
             map.flyTo(latlng, 15);
           },
-          (err) => notify("Permiso de ubicación denegado o error de red.")
+          () => notify("Permiso de ubicación denegado o error de red.")
         );
       }
-    } catch (e) {
+    } catch {
       notify("No se pudo obtener la ubicación o permiso denegado.");
     }
   };
@@ -156,7 +156,6 @@ function App() {
   }, [lightMode]);
 
   // Auth
-  const [token, setToken] = useState(localStorage.getItem('tb_token') || null);
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('tb_user') || 'null'));
   const [showLoginModal, setShowLoginModal] = useState(false);
 
@@ -252,7 +251,7 @@ function App() {
         setOvertureResults(otData);
         setGeocodeResults(geoData);
         setShowOvertureDrop(otData.length > 0 || geoData.length > 0);
-      } catch (e) {
+      } catch {
         setOvertureResults([]);
         setGeocodeResults([]);
         setShowOvertureDrop(false);
@@ -339,7 +338,6 @@ function App() {
     });
     const data = await res.json();
     if (data.token) {
-      setToken(data.token);
       setUser(data.user);
       localStorage.setItem('tb_token', data.token);
       localStorage.setItem('tb_user', JSON.stringify(data.user));
@@ -351,7 +349,6 @@ function App() {
   };
 
   const handleLogout = () => {
-    setToken(null);
     setUser(null);
     localStorage.removeItem('tb_token');
     localStorage.removeItem('tb_user');
@@ -385,7 +382,7 @@ function App() {
       const updatedShop = await res.json();
       setShops(prev => prev.map(s => s.id === id ? updatedShop : s));
       setSelectedShop(updatedShop);
-    } catch (e) { notify("Error al guardar voto"); }
+    } catch { notify("Error al guardar voto"); }
   };
 
   const handleDeleteShop = async (id) => {
@@ -405,7 +402,7 @@ function App() {
         await fetch(`${API_BASE}/api/shops/${id}`, { method: 'DELETE', headers: authHeaders() });
         setShops(prev => prev.filter(s => s.id !== id));
         closePanel();
-      } catch (e) { notify("Error al eliminar."); }
+      } catch { notify("Error al eliminar."); }
     }
   };
 
@@ -467,7 +464,7 @@ function App() {
       setShops(prev => prev.map(s => s.id === id ? updated : s));
       setSelectedShop(updated);
       setIsEditingShop(false);
-    } catch (e) { notify("Error al editar."); }
+    } catch { notify("Error al editar."); }
   };
 
   // ── Moderation ──
@@ -491,14 +488,14 @@ function App() {
       await fetch(`${API_BASE}/api/shops/${id}/approve`, { method: 'PATCH', headers: authHeaders() });
       fetchPendingShops();
       fetchShops();
-    } catch (e) { notify("Error al aprobar."); }
+    } catch { notify("Error al aprobar."); }
   };
 
   const handleRejectShop = async (id) => {
     try {
       await fetch(`${API_BASE}/api/shops/${id}`, { method: 'DELETE', headers: authHeaders() });
       fetchPendingShops();
-    } catch (e) { notify("Error al rechazar."); }
+    } catch { notify("Error al rechazar."); }
   };
 
   // ── Render ──

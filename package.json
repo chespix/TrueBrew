@@ -10,7 +10,8 @@
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint .",
     "preview": "vite preview",
-    "fetch:cafes": "node scripts/fetch-cafes.mjs"
+    "fetch:cafes": "node scripts/fetch-cafes.mjs",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",
